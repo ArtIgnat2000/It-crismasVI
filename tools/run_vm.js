@@ -116,7 +116,10 @@ const renderer = {
     },
     updateDrawableVisible: (id, v) => { const d = drawables.get(id); if (d) d.visible = v; },
     updateDrawableSkinId: () => {},
-    updateDrawableEffect: () => {},
+    updateDrawableEffect: (id, effect, value) => {
+        const d = drawables.get(id);
+        if (d) { d.fx = d.fx || {}; d.fx[effect] = value; }
+    },
     setDrawableOrder: () => 0,
     getDrawableOrder: () => 0,
     createBitmapSkin: () => 1, createSVGSkin: () => 1, createTextSkin: () => 1,
@@ -397,12 +400,82 @@ vm.loadProject(fs.readFileSync(file)).then(() => {
 
     if (scenario === 'keystest') {
         vm.greenFlag();
-        sec(19);
+        for (let i = 0; i < 60 * 60 && Number(vars()['акт']) !== 1; i++) step(1);   // до акта 1
+        sec(1);
         const h = hero();
         log(`до прыжка: Мила y=${h && h.y}`);
         press(' ');
         log('getKeyIsDown(space)=' + vm.runtime.ioDevices.keyboard.getKeyIsDown('space'));
         for (let i = 0; i < 12; i++) { sec(1 / 60); log(`  кадр ${i}: y=${hero() && hero().y}`); }
+        process.exit(0);
+    }
+
+    // ---------- retry: кнопка «Ещё раз» должна давать то же состояние, что старт по флагу
+    if (scenario === 'retry') {
+        function fullState() {
+            const st = vm.runtime.getTargetForStage();
+            const out = { backdrop: backdropName(), vars: vars(), sprites: {} };
+            vm.runtime.targets.forEach(t => {
+                if (t.isStage) return;
+                const d = drawables.get(t.drawableID) || {};
+                out.sprites[t.getName()] = {
+                    vis: t.visible, x: +t.x.toFixed(1), y: +t.y.toFixed(1), sz: +t.size.toFixed(1),
+                    dir: +t.direction || 0, ghost: +(d.fx && d.fx.ghost || 0).toFixed(1),
+                    cos: (t.sprite.costumes || [])[t.currentCostume] ? t.sprite.costumes[t.currentCostume].name : '?',
+                };
+            });
+            return out;
+        }
+        function dump(label) {
+            const s0 = fullState();
+            log(`  ${label}: фон=${s0.backdrop} ` + STATE.filter(k => k in s0.vars).map(k => `${k}=${s0.vars[k]}`).join(' '));
+            log(`    可视: ` + Object.entries(s0.sprites).filter(([, v]) => v.vis).map(([k]) => k).join(', '));
+            return s0;
+        }
+        function clickBtn() {
+            const btn = vm.runtime.targets.find(t => t.getName() === 'Кнопка');
+            if (!btn || !btn.visible) { log('    ВНИМАНИЕ: кнопка не видна'); return false; }
+            vm.runtime.startHats('event_whenthisspriteclicked', {}, btn);  // настоящий клик по кнопке
+            return true;
+        }
+        // A. старт по флагу — пролог (6 с)
+        vm.greenFlag();
+        sec(5);
+        const A = dump('флаг+5с');
+        // B. довести до победы и нажать «Ещё раз»
+        setVar('звёзды', 5); sec(6, { bot: true });
+        setVar('звёзды', 10); sec(8, { bot: true });
+        setVar('жизни', 20);
+        for (let i = 0; i < 150 * 60 && !Number(vars()['победа']); i++) step(1, { bot: true });
+        if (!Number(vars()['победа'])) { log('РЕТРАЙ: победа не наступила (акт=' + vars()['акт'] + ')'); process.exit(0); }
+        sec(4);
+        if (!clickBtn()) { log('РЕТРАЙ: нет кнопки после победы'); process.exit(0); }
+        sec(5);
+        const B = dump('победа+кнопка+5с');
+        // C. проиграть и нажать «Ещё раз»
+        setVar('звёзды', 5); sec(6, { bot: true });
+        setVar('звёзды', 10); sec(8, { bot: true });
+        setVar('жизни', 0);
+        for (let i = 0; i < 40 * 60 && backdropName() !== 'проигрыш'; i++) step(1, { bot: true });
+        sec(3);
+        if (!clickBtn()) { log('РЕТРАЙ: нет кнопки после проигрыша'); process.exit(0); }
+        sec(5);
+        const C = dump('проигрыш+кнопка+5с');
+        log('    траса после проигрыша: ' + trace.slice(-10).join(' | '));
+        trace.length = 0;
+        // сравнение: A vs B и A vs C
+        for (const [label, X] of [['победа+кнопка', B], ['проигрыш+кнопка', C]]) {
+            const diffs = [];
+            if (A.backdrop !== X.backdrop) diffs.push(`ФОН: флаг=${A.backdrop} ${label}=${X.backdrop}`);
+            for (const k of Object.keys(A.vars)) if (A.vars[k] !== X.vars[k]) diffs.push(`вар:${k} флаг=${A.vars[k]} ${label}=${X.vars[k]}`);
+            for (const k of Object.keys(A.sprites)) {
+                const a = A.sprites[k], b = X.sprites[k] || {};
+                if (a.vis !== b.vis) diffs.push(`${k}: видимость флаг=${a.vis} ${label}=${b.vis}`);
+                else if (a.ghost !== (b.ghost || 0)) diffs.push(`${k}: ghost флаг=${a.ghost} ${label}=${b.ghost}`);
+            }
+            log(`РЕТРАЙ ${label}: ${diffs.length ? 'РАСХОЖДЕНИЯ (' + diffs.length + ')' : 'СОСТОЯНИЕ СОВПАДАЕТ С ФЛАГОМ'}`);
+            diffs.slice(0, 14).forEach(d => log('   ! ' + d));
+        }
         process.exit(0);
     }
 
@@ -533,7 +606,7 @@ vm.loadProject(fs.readFileSync(file)).then(() => {
         shot('07_act2_play');
         setVar('звёзды', 10);
         waitAct(3);
-        sec(3.0);                             // Реп6 (метель) + подсказка акта 3
+        sec(6.0);                             // Реп6 (метель) + рассылка «Акт3»: подсказка, обратный отсчёт, Мила
         shot('08_act3_start');
         sec(3.0);
         shot('09_act3_play');
