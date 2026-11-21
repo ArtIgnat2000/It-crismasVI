@@ -40,11 +40,18 @@ def trim_and_pad(img, pad=6, alpha_thr=12):
     return img.crop((x0, y0, x1 + 1, y1 + 1))
 
 
-def process_sprites(max_side=420):
+def process_sprites(max_side=420, only=None):
+    """Хромакей спрайтов.
+
+    only — список имён файлов (например, чтобы не перетирать уже
+    выровненные костюмы героини при обработке новых спрайтов).
+    """
     os.makedirs(OUT_SPR, exist_ok=True)
     done = []
     for fn in sorted(os.listdir(RAW_SPR)):
         if not fn.lower().endswith('.png'):
+            continue
+        if only and fn not in only:
             continue
         src = Image.open(os.path.join(RAW_SPR, fn))
         keyed = chroma_key(src)
@@ -107,8 +114,17 @@ def make_overlays():
 
 
 if __name__ == '__main__':
-    for name, s0, s1 in process_sprites():
+    import sys
+    # python3 tools/art/pipeline.py sprites santa.png snowman.png ...  — обработать только эти
+    argv = sys.argv[1:]
+    only = None
+    if argv and argv[0] == 'sprites':
+        only = set(argv[1:]) or None
+        argv = []
+    for name, s0, s1 in process_sprites(only=only):
         print(f'sprite {name:20s} {s0} -> {s1}')
+    if only:
+        raise SystemExit(0)
     for name, size, kb in process_backgrounds():
         print(f'bg     {name:20s} {size} {kb}KB')
     make_overlays()

@@ -269,14 +269,14 @@ h.script(when_bcast('Реп9'), say('Полночь… Я не успела. Н�
 sl = Target('Сани')
 sl.costume('сани', f'{S}/sleigh.png')
 sl.sound('вжух', f'{F}/sfx_swoosh.mp3')
-sl.size = 42
+sl.size = 38
 sl.visible = False
 sl.script(when_flag(), hide())
 sl.script(when_bcast('Сброс'), hide())
 sl.script(when_bcast('Стоп'), hide())
 for n in (1, 2):
     sl.script(when_bcast(f'Акт{n}'),
-             show(), set_size(42), to_front(),
+             show(), set_size(38), to_front(),
              until(not_act(n),
                    goto(add(of_prop('Мила', 'x position'), -10), add(of_prop('Мила', 'y position'), -34)),
                    ))
@@ -285,14 +285,14 @@ for n in (1, 2):
 g = Target('Подарок')
 g.costume('подарок', f'{S}/gift.png')
 g.sound('магия', f'{F}/sfx_magic.mp3')
-g.size = 18
+g.size = 11
 g.visible = False
 g.script(when_flag(), hide())
 g.script(when_bcast('Сброс'), hide())
 g.script(when_bcast('Стоп'), hide())
 for n in (1, 2, 3):
     g.script(when_bcast(f'Акт{n}'),
-             show(), set_size(18),
+             show(), set_size(11),
              until(not_act(n),
                    goto(add(of_prop('Мила', 'x position'), -22), add(of_prop('Мила', 'y position'), 34)),
                    repeat(20, change_effect('BRIGHTNESS', 2), wait(0.04),
@@ -305,7 +305,7 @@ g.script(when_bcast('Победа'), show(), goto(0, 40), set_size(40), play('м
 st = Target('Звезда')
 st.costume('звезда', f'{S}/star.png')
 st.sound('подбор', f'{F}/sfx_pickup.mp3')
-st.size = 14
+st.size = 11
 st.visible = False
 st.var('клон', 0)
 st.script(when_flag(), hide(), setv('клон', 0))
@@ -323,7 +323,7 @@ for n, ymin, ymax, period in [(1, -95, -30, 1.0), (2, -130, 90, 0.85)]:
                        clone_self(),
                        wait(rnd(period, period + 0.5)),
                        )))
-    st.script(when_clone(), setv('клон', 1), show(), set_size(rnd(11, 15)), point_dir(0),
+    st.script(when_clone(), setv('клон', 1), show(), set_size(rnd(9, 12)), point_dir(0),
               goto(270, rnd(ymin, ymax)),
               until(or_(lt(x_pos(), -270), not_act(n)),
                     change_x(mul(-1, var('скорость'))),
@@ -384,7 +384,7 @@ tr.script(when_clone(), setv('клон', 1),
 
 # =================================================================  СНЕЖОК
 sn = Target('Снежок')
-sn.costume('снежок', f'{S}/snowdrift.png')
+sn.costume('снежок', f'{S}/snowball.png')
 sn.sound('снежок_удар', f'{F}/sfx_snowball.mp3')
 sn.size = 12
 sn.visible = False
@@ -437,18 +437,18 @@ mt = Target('Метель')
 mt.costume('метель', f'{S}/storm.png')
 mt.sound('голос_6', f'{V}/06_storm.mp3')
 mt.sound('ветер', f'{F}/sfx_wind.mp3')
-mt.size = 45
+mt.size = 38
 mt.visible = False
 mt.script(when_flag(), hide())
 mt.script(when_bcast('Сброс'), hide(), clear_fx())
 mt.script(when_bcast('Стоп'), hide())
 mt.script(when_bcast('Реп6'),
-         show(), goto(150, 60), set_size(45), clear_fx(),
+         show(), goto(150, 60), set_size(38), clear_fx(),
          say('Тебе не долететь, козочка!'), play('голос_6'),
          wait(dur(f'{V}/06_storm.mp3')), say(''),
          hide())
 mt.script(when_bcast('Акт3'),
-         show(), goto(160, 50), set_size(45), clear_fx(), point_dir(90),
+         show(), goto(160, 50), set_size(38), clear_fx(), point_dir(90),
          until(not_act(3),
                set_y(rnd(10, 110)),
                turn_right(rnd(-3, 3)),
@@ -488,13 +488,13 @@ sm = Target('Снеговик')
 sm.costume('снеговик', f'{S}/snowman.png')
 sm.sound('голос_4', f'{V}/04_snowman.mp3')
 sm.sound('скрип', f'{F}/sfx_step.mp3')
-sm.size = 26
+sm.size = 20
 sm.visible = False
 sm.script(when_flag(), hide())
 sm.script(when_bcast('Сброс'), hide())
 sm.script(when_bcast('Стоп'), hide())
 sm.script(when_bcast('Реп4'),
-         show(), goto(110, -80), set_size(26),
+         show(), goto(110, -80), set_size(22),
          say('Полозья смазаны, шеф! Держись!'), play('голос_4'),
          wait(dur(f'{V}/04_snowman.mp3')), say(''))
 sm.script(when_bcast('Акт1'), hide())
@@ -503,13 +503,13 @@ sm.script(when_bcast('Акт1'), hide())
 ov = Target('Сова')
 ov.costume('сова', f'{S}/owl.png')
 ov.sound('уханье', f'{F}/sfx_owl.mp3')
-ov.size = 16
+ov.size = 12
 ov.visible = False
 ov.script(when_flag(), hide())
 ov.script(when_bcast('Сброс'), hide())
 ov.script(when_bcast('Стоп'), hide())
 ov.script(when_bcast('Акт2'),
-         show(), goto(-185, 70), set_size(16),
+         show(), goto(-185, 70), set_size(12),
          until(not_act(2),
                set_y(add(70, mul(12, mathop('sin', mul(var('время'), 60))))),
                if_(eq(mod(var('время'), 5), 0), play('уханье')),
