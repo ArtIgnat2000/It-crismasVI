@@ -1,0 +1,10 @@
+# зависимости (ставятся заново через tools/setup.sh)
+tools/vendor/
+tools/node_modules/
+tools/package-lock.json
+node_modules/
+# служебное
+__pycache__/
+*.pyc
+art/_check_*.png
+dist/_test.sb3
