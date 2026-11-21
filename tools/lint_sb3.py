@@ -113,6 +113,21 @@ def lint(path):
             if par and blk.get('topLevel'):
                 problems.append(f'{tn}/{bid}: конфликт topLevel/parent')
         # все переменные, объявленные сцены, должны встречаться
+    # аудит рассылок: у каждого сообщения должен быть отправитель и получатель
+    senders, receivers = set(), set()
+    for t in targets:
+        for blk in t['blocks'].values():
+            if blk.get('opcode') == 'event_broadcast' or blk.get('opcode') == 'event_broadcastandwait':
+                inp = blk.get('inputs', {}).get('BROADCAST_INPUT')
+                if inp and isinstance(inp[1], list) and inp[1][0] == 11:
+                    senders.add(inp[1][2])
+            if blk.get('opcode') == 'event_whenbroadcastreceived':
+                receivers.add(blk['fields']['BROADCAST_OPTION'][0])
+    for name in sorted(receivers - senders):
+        problems.append(f'рассылка «{name}»: есть получатель, но никто не отправляет')
+    for name in sorted(senders - receivers):
+        problems.append(f'рассылка «{name}»: отправляется, но никто не принимает')
+
     # ассеты
     for t in targets:
         for c in t['costumes'] + t['sounds']:

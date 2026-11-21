@@ -558,6 +558,8 @@ ek.script(when_bcast('Старт'),
 ek.script(when_bcast('Сброс'), hide(), clear_fx())
 ek.script(when_bcast('Стоп'), hide())
 ek.script(when_bcast('Затемнить'), hide())
+# запасной путь запуска: если что-то пошло не так, клик по титру перезапускает игру
+ek.script(when_clicked(), bcast('Рестарт'))
 ek.script(when_bcast('Акт1'), hide())
 ek.script(when_bcast('Акт2'), hide())
 ek.script(when_bcast('Акт3'), hide())
