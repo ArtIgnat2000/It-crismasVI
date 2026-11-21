@@ -20,10 +20,13 @@ def lint(path):
     names = {t['name'] for t in targets}
     all_vars = {}   # id -> (name, owner)
     all_bcast = set()
+    bcast_name_by_id = {}   # id -> имя (для проверки порядка примитива [11, имя, id])
     for t in targets:
         for vid, v in t['variables'].items():
             all_vars[vid] = (v[0], t['name'])
-        all_bcast |= set(t.get('broadcasts', {}).keys())
+        for bid, bname in t.get('broadcasts', {}).items():
+            all_bcast.add(bname)
+            bcast_name_by_id[bid] = bname
     costumes_of = {t['name']: {c['name'] for c in t['costumes']} for t in targets}
     sounds_of = {t['name']: {s['name'] for s in t['sounds']} for t in targets}
 
@@ -32,6 +35,11 @@ def lint(path):
         b = t['blocks']
         if not t['costumes']:
             problems.append(f'{tn}: нет костюмов')
+        # без width/height/rotationCenter костюм в Scratch съезжает и вращается вокруг угла
+        for c in t['costumes']:
+            for key in ('width', 'height', 'rotationCenterX', 'rotationCenterY'):
+                if not c.get(key):
+                    problems.append(f"{tn}: у костюма «{c['name']}» нет {key}")
         if not t['sounds'] and not t['isStage']:
             pass  # спрайты без звука допустимы
         for bid, blk in b.items():
@@ -76,9 +84,11 @@ def lint(path):
             if 'LIST' in fields:
                 pass
             if 'BROADCAST_OPTION' in fields:
-                bid2 = fields['BROADCAST_OPTION'][1]
-                if bid2 not in all_bcast:
-                    problems.append(f'{tn}/{bid} ({op}) {fields["BROADCAST_OPTION"][0]}: рассылка не объявлена')
+                bname, bid2 = fields['BROADCAST_OPTION'][0], fields['BROADCAST_OPTION'][1]
+                if bid2 not in bcast_name_by_id:
+                    problems.append(f'{tn}/{bid} ({op}) {bname}: рассылка не объявлена')
+                elif bcast_name_by_id[bid2] != bname:
+                    problems.append(f'{tn}/{bid} ({op}) {bname}: имя не совпадает с id {bid2}')
             # меню-блоки
             if op in ('looks_costume',):
                 cname = fields.get('COSTUME', [None])[0]
@@ -120,7 +130,15 @@ def lint(path):
             if blk.get('opcode') == 'event_broadcast' or blk.get('opcode') == 'event_broadcastandwait':
                 inp = blk.get('inputs', {}).get('BROADCAST_INPUT')
                 if inp and isinstance(inp[1], list) and inp[1][0] == 11:
-                    senders.add(inp[1][2])
+                    # формат примитива рассылки в sb3: [11, ИМЯ, id];
+                    # если порядок перепутан, VM молча не запускает получателей
+                    name, bid = inp[1][1], inp[1][2]
+                    if bid not in bcast_name_by_id:
+                        problems.append(f'{tn}: рассылка «{name}» ссылается на неизвестный id «{bid}»')
+                    elif bcast_name_by_id[bid] != name:
+                        problems.append(f'{tn}: рассылка «{name}» — имя и id ({bid}) не совпадают '
+                                        f'(в примитиве должен быть порядок [11, ИМЯ, id])')
+                    senders.add(name)
             if blk.get('opcode') == 'event_whenbroadcastreceived':
                 receivers.add(blk['fields']['BROADCAST_OPTION'][0])
     for name in sorted(receivers - senders):

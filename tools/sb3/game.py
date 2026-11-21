@@ -164,7 +164,8 @@ d.script(when_flag(),
 d.script(when_bcast('Акт3'),
          until(not_act(3),
                wait(1),
-               changev('осталось', -1),
+               # не уходим в минус: на табло должен остаться 0
+               if_(gt(var('осталось'), 0), changev('осталось', -1)),
                if_(eq(var('осталось'), 12), bcast('Реп7'))))
 
 # ==================================================================  МИЛА
@@ -241,9 +242,10 @@ h.script(when_bcast('Акт3'),
 
 # --- удар: неуязвимость и мерцание (не даёт потерять 3 жизни за секунду)
 h.script(when_bcast('Хит'),
-         if_(eq(var('неуязвим'), 0),
+         # жизни не уходят в минус: удар засчитывается, только пока они есть
+         if_(and_(eq(var('неуязвим'), 0), gt(var('жизни'), 0)),
              setv('неуязвим', 1), changev('жизни', -1), play('удар'),
-             repeat(7, set_effect('GHOST', 60), wait(0.09), set_effect('GHOST', 0), wait(0.09)),
+             repeat(14, set_effect('GHOST', 60), wait(0.09), set_effect('GHOST', 0), wait(0.09)),
              setv('неуязвим', 0)))
 
 h.script(when_bcast('Победа'), show(), clear_fx(), goto(-140, -110), set_size(32), costume('cheer'),
@@ -305,19 +307,23 @@ st.costume('звезда', f'{S}/star.png')
 st.sound('подбор', f'{F}/sfx_pickup.mp3')
 st.size = 14
 st.visible = False
-st.script(when_flag(), hide())
+st.var('клон', 0)
+st.script(when_flag(), hide(), setv('клон', 0))
 st.script(when_bcast('Сброс'), hide())
 st.script(when_bcast('Стоп'), hide())
 st.script(when_bcast('Стоп'), delete_clone())
 
 for n, ymin, ymax, period in [(1, -95, -30, 1.0), (2, -130, 90, 0.85)]:
+    # рассылки запускают обработчики и в клонах, поэтому клонирует только оригинал
     st.script(when_bcast(f'Акт{n}'),
              hide(),
-             until(not_act(n),
-                   clone_self(),
-                   wait(rnd(period, period + 0.5)),
-                   ))
-    st.script(when_clone(), show(), set_size(rnd(11, 15)), point_dir(0),
+             if_(eq(var('клон'), 0),
+                 wait(1.2),
+                 until(not_act(n),
+                       clone_self(),
+                       wait(rnd(period, period + 0.5)),
+                       )))
+    st.script(when_clone(), setv('клон', 1), show(), set_size(rnd(11, 15)), point_dir(0),
               goto(270, rnd(ymin, ymax)),
               until(or_(lt(x_pos(), -270), not_act(n)),
                     change_x(mul(-1, var('скорость'))),
@@ -330,17 +336,20 @@ dr = Target('Сугроб')
 dr.costume('сугроб', f'{S}/snowdrift.png')
 dr.size = 24
 dr.visible = False
-dr.script(when_flag(), hide())
+dr.var('клон', 0)
+dr.script(when_flag(), hide(), setv('клон', 0))
 dr.script(when_bcast('Сброс'), hide())
 dr.script(when_bcast('Стоп'), hide())
 dr.script(when_bcast('Стоп'), delete_clone())
 dr.script(when_bcast('Акт1'),
          hide(),
-         until(not_act(1),
-               clone_self(),
-               wait(rnd(1.1, 2.0)),
-               ))
-dr.script(when_clone(),
+         if_(eq(var('клон'), 0),
+             wait(1.6),
+             until(not_act(1),
+                   clone_self(),
+                   wait(rnd(1.6, 2.6)),
+                   )))
+dr.script(when_clone(), setv('клон', 1),
          show(), set_size(rnd(16, 22)), goto(280, GROUND - 25),
          until(or_(lt(x_pos(), -280), not_act(1)),
                change_x(mul(-1, var('скорость'))),
@@ -352,17 +361,20 @@ tr = Target('Ёлка')
 tr.costume('ёлка', f'{S}/tree.png')
 tr.size = 28
 tr.visible = False
-tr.script(when_flag(), hide())
+tr.var('клон', 0)
+tr.script(when_flag(), hide(), setv('клон', 0))
 tr.script(when_bcast('Сброс'), hide())
 tr.script(when_bcast('Стоп'), hide())
 tr.script(when_bcast('Стоп'), delete_clone())
 tr.script(when_bcast('Акт2'),
          hide(),
-         until(not_act(2),
-               clone_self(),
-               wait(rnd(0.75, 1.4)),
-               ))
-tr.script(when_clone(),
+         if_(eq(var('клон'), 0),
+             wait(1.4),
+             until(not_act(2),
+                   clone_self(),
+                   wait(rnd(1.2, 1.9)),
+                   )))
+tr.script(when_clone(), setv('клон', 1),
          show(), set_size(rnd(24, 34)), goto(280, rnd(-150, 60)),
          until(or_(lt(x_pos(), -280), not_act(2)),
                change_x(mul(-1, var('скорость'))),
@@ -376,17 +388,20 @@ sn.costume('снежок', f'{S}/snowdrift.png')
 sn.sound('снежок_удар', f'{F}/sfx_snowball.mp3')
 sn.size = 12
 sn.visible = False
-sn.script(when_flag(), hide())
+sn.var('клон', 0)
+sn.script(when_flag(), hide(), setv('клон', 0))
 sn.script(when_bcast('Сброс'), hide())
 sn.script(when_bcast('Стоп'), hide())
 sn.script(when_bcast('Стоп'), delete_clone())
 sn.script(when_bcast('Акт3'),
          hide(),
-         until(not_act(3),
-               clone_self(),
-               wait(rnd(0.55, 1.0)),
-               ))
-sn.script(when_clone(),
+         if_(eq(var('клон'), 0),
+             wait(1.0),
+             until(not_act(3),
+                   clone_self(),
+                   wait(rnd(0.9, 1.5)),
+                   )))
+sn.script(when_clone(), setv('клон', 1),
          show(), goto(of_prop('Метель', 'x position'), of_prop('Метель', 'y position')),
          point_towards('Мила'), turn_right(rnd(-12, 12)),
          until(or_(touching('_edge_'), not_act(3)),
@@ -611,14 +626,15 @@ fw.costume('искра', f'{U}/stars_0.png')
 fw.sound('салют', f'{F}/sfx_firework.mp3')
 fw.size = 8
 fw.visible = False
-fw.script(when_flag(), hide())
+fw.var('клон', 0)
+fw.script(when_flag(), hide(), setv('клон', 0))
 fw.script(when_bcast('Сброс'), hide())
 fw.script(when_bcast('Стоп'), delete_clone(), hide())
-fw.script(when_clone(), hide())
+fw.script(when_clone(), setv('клон', 1), hide())
 fw.script(when_bcast('Победа'),
          hide(), wait(0.3),
-         repeat(10, clone_self(), wait(0.22)))
-fw.script(when_clone(),
+         if_(eq(var('клон'), 0), repeat(10, clone_self(), wait(0.22))))
+fw.script(when_clone(), setv('клон', 1),
          show(), goto(rnd(-180, 180), rnd(0, 120)), set_size(rnd(6, 12)),
          set_effect('COLOR', rnd(0, 100)), play('салют'), point_dir(rnd(0, 360)),
          repeat(24, move_steps(4), turn_right(15), change_effect('GHOST', 4), change_size(-0.2), wait(0.02)),

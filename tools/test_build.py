@@ -37,5 +37,24 @@ p.add(goat)
 out = os.path.join(ROOT, 'dist', '_test.sb3')
 build.build(p, out)
 ok = build.validate(out)
+
+# --- регрессии формата, на которых уже обжигались ---
+import json, zipfile
+data = json.loads(zipfile.ZipFile(out).read('project.json'))
+bcast = data['targets'][0].get('broadcasts', {})
+for t in data['targets']:
+    for bid, blk in t['blocks'].items():
+        inp = (blk.get('inputs') or {}).get('BROADCAST_INPUT')
+        if inp and isinstance(inp[1], list) and inp[1][0] == 11:
+            name, ref = inp[1][1], inp[1][2]
+            if bcast.get(ref) != name:
+                print(f'FAIL: примитив рассылки [{bid}] = [11, {name!r}, {ref!r}] — порядок должен быть [11, ИМЯ, id]')
+                ok = False
+        # костюмы без размеров «съезжают» в Scratch
+    for c in t['costumes']:
+        if not all(c.get(k) for k in ('width', 'height', 'rotationCenterX', 'rotationCenterY')):
+            print(f"FAIL: костюм {t['name']}/{c['name']} без width/height/rotationCenter")
+            ok = False
+
 print('RESULT:', 'OK' if ok else 'FAIL')
 sys.exit(0 if ok else 1)
