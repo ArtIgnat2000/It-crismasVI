@@ -406,6 +406,78 @@ vm.loadProject(fs.readFileSync(file)).then(() => {
         process.exit(0);
     }
 
+    // ---------- 0a. проходимость: бот играет по правилам и должен дойти до победы
+    if (scenario === 'play') {
+        vm.greenFlag();
+        const named = n => vm.runtime.targets.filter(t => t.getName() === n);
+        const origOf = n => vm.runtime.targets.find(t => t.getName() === n);
+        const origStar = origOf('Звезда');
+        let started = false, prevAct = -1, lastLog = -1, jumpHold = 0, prevLives = 3;
+        let hits = 0;
+        for (let f = 0; f < 30 * 300; f++) {
+            const h = hero();
+            const act = Number(vars()['акт']);
+            if (h && act === 1) {
+                const stars = named('Звезда').filter(t => t !== origStar);
+                const drifts = named('Сугроб').filter(t => t !== origOf('Сугроб'));
+                const nearStar = stars.find(c => Math.abs(c.x - h.x) < 45 && c.y > -58);
+                const nearDrift = drifts.find(z => z.x > h.x + 45 && z.x < h.x + 150);
+                const onGround = Math.abs(h.y + 80) < 3;
+                if (onGround && (nearStar || nearDrift)) jumpHold = 6;
+                if (jumpHold > 0) { press(' '); jumpHold--; } else release(' ');
+            } else if (h && act === 2) {
+                const stars = named('Звезда').filter(t => t !== origStar);
+                const trees = named('Ёлка').filter(t => t !== origOf('Ёлка'));
+                const clear = trees.every(z => z.x > h.x + 150 || z.x < h.x - 40);
+                let ty = 40;
+                const cand = stars.filter(() => clear);
+                if (cand.length) {
+                    let best = cand[0];
+                    for (const c of cand) if (Math.abs(c.x - h.x) < Math.abs(best.x - h.x)) best = c;
+                    ty = best.y;
+                }
+                if (h.y < ty - 3) press('up arrow'); else release('up arrow');
+                if (h.y > ty + 3) press('down arrow'); else release('down arrow');
+            } else if (h && act === 3) {
+                // уходим от ближайшего снежка на другую половину крыши
+                const balls = named('Снежок').filter(t => t !== origOf('Снежок'));
+                let tx = 0, ty = -70;
+                if (balls.length) {
+                    let near = balls[0];
+                    for (const b of balls) if (Math.abs(b.x - h.x) < Math.abs(near.x - h.x)) near = b;
+                    tx = near.x > 0 ? -195 : 195;
+                    ty = Math.max(-70, Math.min(80, near.y));
+                }
+                h.setXY(tx, ty);
+            } else {
+                release(' '); release('up arrow'); release('down arrow');
+            }
+            step(1);
+            const v = vars();
+            if (v['игра'] === 1) started = true;
+            if (Number(v['жизни']) < prevLives) {
+                hits++;
+                log(`  удар t=${(vnow / 1000).toFixed(1)} акт=${v['акт']} жизни ${prevLives}->${v['жизни']}`);
+            }
+            prevLives = Number(v['жизни']);
+            const a = Number(v['акт']);
+            if (a !== prevAct) {
+                log(`== акт ${prevAct} -> ${a} t=${(vnow / 1000).toFixed(1)} ` + stateStr());
+                prevAct = a;
+            }
+            if (started && v['игра'] !== 1 && a === 0) break;
+            if (Math.floor(vnow / 1000) !== lastLog) {
+                lastLog = Math.floor(vnow / 1000);
+                log(`  t=${lastLog} акт=${a} звёзды=${v['звёзды']} жизни=${v['жизни']} ` +
+                    `время=${v['время']} осталось=${v['осталось']} победа=${v['победа']}`);
+            }
+        }
+        const v = vars();
+        log(`ИТОГ проходимости: победа=${v['победа']} звёзды=${v['звёзды']} жизни=${v['жизни']} ` +
+            `время=${v['время']} ударов=${hits}`);
+        process.exit(0);
+    }
+
     // ---------- 0. кадры сцены: снимки состояния для композиционного аудита
     if (scenario === 'frames') {
         const outFile = process.argv[4] || '../dist/frames.json';

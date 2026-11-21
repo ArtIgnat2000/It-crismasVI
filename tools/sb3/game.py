@@ -67,6 +67,15 @@ def not_act(n):
     return not_(eq(var('акт'), n))
 
 
+def near_x(name, dist):
+    """|x - x(спрайта)| < dist"""
+    return lt(mathop('abs', sub(x_pos(), of_prop(name, 'x position'))), dist)
+
+
+def near_y(name, dist):
+    return lt(mathop('abs', sub(y_pos(), of_prop(name, 'y position'))), dist)
+
+
 def alive():
     return and_(gt(var('жизни'), 0), gt(var('время'), 0))
 
@@ -108,16 +117,20 @@ act1 = [
 ]
 
 act2 = [
-    setv('акт', 2), setv('скорость', 9),
+    setv('акт', 2), setv('скорость', 7.5),
+    # каждый акт — свой заход: сердечки восстанавливаются, счёт звёзд начинается с 0,
+    # чтобы на табло всегда было видно «сколько ещё до цели» (5 звёзд за акт)
+    setv('жизни', 3), setv('звёзды', 0),
     setv('музыка', 0), bcast('МузыкаСтоп'), wait(0.06), setv('музыка', 3),
     bcast_wait('Затемнить'), backdrop('лес'), bcast_wait('Осветлить'),
     bcast('Акт2'),
-    until(or_(gt(var('звёзды'), 9), or_(lt(var('жизни'), 1), lt(var('время'), 1))), wait(0.1)),
+    until(or_(gt(var('звёзды'), 4), or_(lt(var('жизни'), 1), lt(var('время'), 1))), wait(0.1)),
     setv('акт', 0), bcast('Стоп'), wait(0.3),
 ]
 
 act3 = [
     setv('акт', 3), setv('скорость', 7), setv('осталось', 20),
+    setv('жизни', 3),
     setv('музыка', 0), bcast('МузыкаСтоп'), wait(0.06), setv('музыка', 4),
     bcast_wait('Затемнить'), backdrop('крыша'), bcast_wait('Осветлить'),
     bcast_wait('Реп6'),
@@ -208,15 +221,15 @@ h.script(when_bcast('Акт1'),
          costume('run'), setv('vy', 0), setv('на_земле', 1), set_effect('GHOST', 0),
          until(not_act(1),
                if_(and_(key('space'), eq(var('на_земле'), 1)),
-                   setv('vy', 13), setv('на_земле', 0), play('прыжок'), costume('jump')),
+                   setv('vy', 15), setv('на_земле', 0), play('прыжок'), costume('jump')),
                change_y(var('vy')),
                changev('vy', -1.3),
                if_(lt(y_pos(), GROUND),
                    set_y(GROUND), setv('vy', 0),
                    if_(eq(var('на_земле'), 0), play('приземление')),
                    setv('на_земле', 1), costume('run')),
-               ))
-
+               wait(0))
+               )
 # --- Акт 2: полёт на санях, управление вверх/вниз
 h.script(when_bcast('Акт2'),
          show(), set_size(HERO_SIZE), goto(-130, -60), point_dir(90),
@@ -226,7 +239,7 @@ h.script(when_bcast('Акт2'),
                if_(key('down arrow'), change_y(-3.4)),
                if_(gt(y_pos(), 95), set_y(95)),
                if_(lt(y_pos(), -75), set_y(-75)),
-               ))
+               wait(0)))
 
 # --- Акт 3: крыша, бег влево-вправо + прыжок
 h.script(when_bcast('Акт3'),
@@ -238,14 +251,14 @@ h.script(when_bcast('Акт3'),
                if_(gt(x_pos(), 210), set_x(210)),
                if_(lt(x_pos(), -210), set_x(-210)),
                if_(and_(key('space'), eq(var('на_земле'), 1)),
-                   setv('vy', 13), setv('на_земле', 0), play('прыжок'), costume('jump')),
+                   setv('vy', 15), setv('на_земле', 0), play('прыжок'), costume('jump')),
                change_y(var('vy')),
                changev('vy', -1.3),
                if_(lt(y_pos(), GROUND),
                    set_y(GROUND), setv('vy', 0),
                    if_(eq(var('на_земле'), 0), play('приземление')),
                    setv('на_земле', 1), costume('run')),
-               ))
+               wait(0)))
 
 # --- удар: неуязвимость и мерцание (не даёт потерять 3 жизни за секунду)
 h.script(when_bcast('Хит'),
@@ -285,7 +298,7 @@ sl.script(when_bcast('Акт2'),
          show(), set_size(30), to_back(),
          until(not_act(2),
                goto(add(of_prop('Мила', 'x position'), -6), add(of_prop('Мила', 'y position'), -14)),
-               ))
+               wait(0)))
 sl.script(when_bcast('Акт1'), hide())
 sl.script(when_bcast('Акт3'), hide())
 
@@ -327,7 +340,7 @@ st.script(when_bcast('Сброс'), hide())
 st.script(when_bcast('Стоп'), hide())
 st.script(when_bcast('Стоп'), delete_clone())
 
-for n, ymin, ymax, period in [(1, -116, -34, 1.0), (2, -100, 84, 0.85)]:
+for n, period in [(1, 1.0), (2, 0.85)]:
     # рассылки запускают обработчики и в клонах, поэтому клонирует только оригинал
     st.script(when_bcast(f'Акт{n}'),
              hide(),
@@ -337,16 +350,24 @@ for n, ymin, ymax, period in [(1, -116, -34, 1.0), (2, -100, 84, 0.85)]:
                        clone_self(),
                        wait(rnd(period, period + 0.5)),
                        )))
-    st.script(when_clone(), setv('клон', 1), show(), set_size(rnd(9, 12)), point_dir(0),
-              goto(270, rnd(ymin, ymax)),
-              until(or_(lt(x_pos(), -270), not_act(n)),
-                    change_x(mul(-1, var('скорость'))),
-                    turn_right(4),
-                    if_(touching('Мила'), changev('звёзды', 1), play('подбор'), delete_clone()),
-                    ),
-              # без этого клоны копились за левым краем сцены (мусор к 70-й секунде)
-              delete_clone())
-    
+
+# ВАЖНО: скрипт клона должен быть РОВНО ОДИН. Пока он объявлялся внутри цикла
+# по актам, в спрайте оказывались два одинаковых «когда я — клон»: второй
+# (для акта 2) в первом акте сразу видел «акт <> 2», выходил из цикла и удалял
+# звезду в момент рождения — поэтому звёзды не долетали до Милы.
+st.script(when_clone(), setv('клон', 1), show(), set_size(rnd(9, 12)), point_dir(0),
+          # высота под акт: в первом акте только та, до которой Мила достаёт прыжком
+          ifelse(eq(var('акт'), 1),
+                 [goto(270, rnd(-112, -20))],
+                 [goto(270, rnd(-58, 62))]),
+          until(or_(lt(x_pos(), -270), eq(var('акт'), 0)),
+                change_x(mul(-1, var('скорость'))),
+                turn_right(4),
+                if_(touching('Мила'), changev('звёзды', 1), play('подбор'), delete_clone()),
+                # шаг = кадр: скорость не зависит от мощности компьютера
+                wait(0)),
+          delete_clone())
+
 # ==================================================================  СУГРОБ
 dr = Target('Сугроб')
 dr.costume('сугроб', f'{S}/snowdrift.png')
@@ -363,14 +384,17 @@ dr.script(when_bcast('Акт1'),
              wait(1.6),
              until(not_act(1),
                    clone_self(),
-                   wait(rnd(1.6, 2.6)),
+                   wait(rnd(1.8, 2.8)),
                    )))
 dr.script(when_clone(), setv('клон', 1),
-         show(), set_size(rnd(16, 20)), goto(280, -117),
+         show(), set_size(rnd(14, 17)), goto(280, -116),
          until(or_(lt(x_pos(), -280), not_act(1)),
                change_x(mul(-1, var('скорость'))),
-               if_(and_(touching('Мила'), eq(var('неуязвим'), 0)), bcast('Хит'), delete_clone()),
-               ),
+               # заденет, только если Мила низко (прыжок переносит её через сугроб)
+               if_(and_(and_(near_x('Мила', 26), lt(of_prop('Мила', 'y position'), GROUND + 30)),
+                        eq(var('неуязвим'), 0)),
+                   bcast('Хит'), delete_clone()),
+               wait(0)),
          delete_clone())
 
 # ===================================================================  ЁЛКА
@@ -389,15 +413,16 @@ tr.script(when_bcast('Акт2'),
              wait(1.4),
              until(not_act(2),
                    clone_self(),
-                   wait(rnd(1.2, 1.9)),
+                   wait(rnd(2.2, 3.0)),
                    )))
 tr.script(when_clone(), setv('клон', 1),
-         show(), set_size(rnd(24, 34)), goto(280, rnd(-90, 55)),
+         show(), set_size(rnd(12, 15)), goto(280, rnd(-100, -66)),
          until(or_(lt(x_pos(), -280), not_act(2)),
                change_x(mul(-1, var('скорость'))),
                turn_right(1),
-               if_(and_(touching('Мила'), eq(var('неуязвим'), 0)), bcast('Хит'), delete_clone()),
-               ),
+               if_(and_(and_(near_x('Мила', 24), near_y('Мила', 34)), eq(var('неуязвим'), 0)),
+                   bcast('Хит'), delete_clone()),
+               wait(0)),
          delete_clone())
 
 # =================================================================  СНЕЖОК
@@ -423,9 +448,9 @@ sn.script(when_clone(), setv('клон', 1),
          show(), goto(of_prop('Метель', 'x position'), of_prop('Метель', 'y position')),
          point_towards('Мила'), turn_right(rnd(-12, 12)),
          until(or_(touching('_edge_'), not_act(3)),
-               move_steps(13),
+               move_steps(8),
                if_(touching('Мила'), play('снежок_удар'), bcast('Хит'), delete_clone()),
-               ))
+               wait(0)))
 
 # ====================================================================  СНЕГ
 snow = Target('Снег')
@@ -450,7 +475,7 @@ snow.script(when_clone(),
                 if_(lt(y_pos(), -190), set_y(190), set_x(rnd(-250, 250))),
                 if_(gt(x_pos(), 250), set_x(-250)),
                 if_(lt(x_pos(), -250), set_x(250)),
-            ))
+                wait(0)))
 
 # ===================================================================  МЕТЕЛЬ
 mt = Target('Метель')
