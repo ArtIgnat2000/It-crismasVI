@@ -130,7 +130,7 @@ class Project:
             'targets': out_targets,
             'monitors': [],
             'extensions': [],
-            'meta': {'semver': '3.0.0', 'vm': '0.2.0', 'agent': 'sb3-builder/1.0'},
+            'meta': {'semver': '3.0.0', 'vm': '0.2.0', 'agent': 'it-christmas-vi/1.2'},
         }
         return project, bcast_ids
 
@@ -382,6 +382,6 @@ def serialize_project(project):
         'targets': targets,
         'monitors': [],
         'extensions': [],
-        'meta': {'semver': '3.0.0', 'vm': '0.2.0', 'agent': 'sb3-builder/1.0'},
+        'meta': {'semver': '3.0.0', 'vm': '0.2.0', 'agent': 'it-christmas-vi/1.2'},
     }
     return data, assets

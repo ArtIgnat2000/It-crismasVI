@@ -12,7 +12,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
-from blocks import Project, Target, Block  # noqa: E402
+from blocks import Project, Target, Block, mp3_info  # noqa: E402
 import sb  # noqa: E402
 from sb import *  # noqa: E402
 
@@ -23,6 +23,12 @@ U = f'{R}/art/ui'
 M = f'{R}/audio/music'
 F = f'{R}/audio/foley'
 V = f'{R}/audio/voice'
+
+def dur(path):
+    """Длительность mp3 в секундах (чтобы не блокироваться на «играть до завершения»)."""
+    rate, count = mp3_info(path)
+    return round(count / max(rate, 1), 1) + 0.5
+
 
 GROUND = -95          # «пол» для героини (центр спрайта)
 HERO_SIZE = 26
@@ -76,42 +82,46 @@ d.visible = False
 d.x, d.y = 0, 0
 d.var('играющая', 0)
 
-d.script(when_flag(), bcast('Старт'))
+# по флагу сразу показываем мастерскую и титр, затем запускаем сценарий
+d.script(when_flag(),
+         setv('старт_идёт', 0),
+         backdrop('мастерская'),
+         bcast('Старт'))
 
 d.script(when_bcast('Рестарт'), bcast('Старт'))
 
 act1 = [
     setv('акт', 1), setv('скорость', 6),
-    setv('музыка', 0), bcast_wait('МузыкаСтоп'), setv('музыка', 2),
+    setv('музыка', 0), bcast('МузыкаСтоп'), wait(0.06), setv('музыка', 2),
     bcast_wait('Затемнить'), backdrop('город'), bcast_wait('Осветлить'),
     bcast('Акт1'),
     until(or_(gt(var('звёзды'), 4), or_(lt(var('жизни'), 1), lt(var('время'), 1))), wait(0.1)),
     bcast_wait('Реп5'),
-    setv('акт', 0), bcast_wait('Стоп'),
+    setv('акт', 0), bcast('Стоп'), wait(0.3),
 ]
 
 act2 = [
     setv('акт', 2), setv('скорость', 9),
-    setv('музыка', 0), bcast_wait('МузыкаСтоп'), setv('музыка', 3),
+    setv('музыка', 0), bcast('МузыкаСтоп'), wait(0.06), setv('музыка', 3),
     bcast_wait('Затемнить'), backdrop('лес'), bcast_wait('Осветлить'),
     bcast('Акт2'),
     until(or_(gt(var('звёзды'), 9), or_(lt(var('жизни'), 1), lt(var('время'), 1))), wait(0.1)),
-    setv('акт', 0), bcast_wait('Стоп'),
+    setv('акт', 0), bcast('Стоп'), wait(0.3),
 ]
 
 act3 = [
     setv('акт', 3), setv('скорость', 7), setv('осталось', 20),
-    setv('музыка', 0), bcast_wait('МузыкаСтоп'), setv('музыка', 4),
+    setv('музыка', 0), bcast('МузыкаСтоп'), wait(0.06), setv('музыка', 4),
     bcast_wait('Затемнить'), backdrop('крыша'), bcast_wait('Осветлить'),
     bcast_wait('Реп6'),
     bcast('Акт3'),
     until(or_(lt(var('осталось'), 1), or_(lt(var('жизни'), 1), lt(var('время'), 1))), wait(0.1)),
-    setv('акт', 0), bcast_wait('Стоп'),
+    setv('акт', 0), bcast('Стоп'), wait(0.3),
     ifelse(alive(), [setv('победа', 1)], [setv('победа', 0)]),
 ]
 
 win = [
-    setv('игра', 0), setv('старт_идёт', 0), setv('музыка', 0), bcast_wait('МузыкаСтоп'),
+    setv('игра', 0), setv('старт_идёт', 0), setv('музыка', 0), bcast('МузыкаСтоп'), wait(0.06),
     bcast_wait('Затемнить'), backdrop('победа'), bcast_wait('Осветлить'),
     setv('музыка', 5),
     bcast_wait('Победа'),
@@ -120,7 +130,7 @@ win = [
 ]
 
 lose = [
-    setv('игра', 0), setv('старт_идёт', 0), setv('музыка', 0), bcast_wait('МузыкаСтоп'),
+    setv('игра', 0), setv('старт_идёт', 0), setv('музыка', 0), bcast('МузыкаСтоп'), wait(0.06),
     bcast_wait('Затемнить'), backdrop('проигрыш'), bcast_wait('Осветлить'),
     setv('музыка', 6),
     bcast_wait('Проигрыш'),
@@ -129,16 +139,13 @@ lose = [
 
 d.script(
     when_bcast('Старт'),
-    if_(eq(var('старт_идёт'), 1), stop_this()),
-    setv('старт_идёт', 1),
     setv('игра', 0), setv('акт', 0), setv('жизни', 3), setv('звёзды', 0),
     setv('время', 150), setv('победа', 0), setv('неуязвим', 0),
     setv('скорость', 6), setv('ветер', 0.4), setv('осталось', 0),
-    setv('музыка', 0), bcast_wait('МузыкаСтоп'),
-    bcast_wait('Сброс'),
+    setv('музыка', 0), bcast('МузыкаСтоп'), wait(0.06),
+    bcast('Сброс'), wait(0.4),
     bcast('СнегИдёт'),
     setv('игра', 1),
-    wait(0.45),
     backdrop('мастерская'),
     setv('музыка', 1),
     bcast_wait('Реп1'), bcast_wait('Реп2'), bcast_wait('Реп3'), bcast_wait('Реп4'),
@@ -247,14 +254,14 @@ h.script(when_bcast('Проигрыш'), show(), clear_fx(), costume('idle'), se
 # --- реплики
 h.script(when_bcast('Реп1'), show(), goto(60, -88), set_size(HERO_SIZE),
          costume('idle'), point_dir(90), clear_fx())
-h.script(when_bcast('Реп3'), say('Я успею! Только бы не опоздать до полуночи!'),
-         play_wait('голос_3'), say(''))
-h.script(when_bcast('Реп5'), say('Ещё одна звезда! Ещё немного, и я у цели!'),
-         play_wait('голос_5'), say(''))
-h.script(when_bcast('Реп7'), say('Смотрите, окно! Там нас ждут и верят в чудо!'),
-         play_wait('голос_7'), say(''))
+h.script(when_bcast('Реп3'), say('Я успею!'),
+         play('голос_3'), wait(dur(f'{V}/03_goat_1.mp3')), say(''))
+h.script(when_bcast('Реп5'), say('Ещё одна звезда!'),
+         play('голос_5'), wait(dur(f'{V}/05_goat_2.mp3')), say(''))
+h.script(when_bcast('Реп7'), say('Смотрите, окно! Там ждут чудо!'),
+         play('голос_7'), wait(dur(f'{V}/07_goat_3.mp3')), say(''))
 h.script(when_bcast('Реп9'), say('Полночь… Я не успела. Но я попробую снова!'),
-         play_wait('голос_9'), say(''))
+         play('голос_9'), wait(dur(f'{V}/09_lose.mp3')), say(''))
 
 # ==================================================================  САНИ
 sl = Target('Сани')
@@ -422,7 +429,8 @@ mt.script(when_bcast('Сброс'), hide(), clear_fx())
 mt.script(when_bcast('Стоп'), hide())
 mt.script(when_bcast('Реп6'),
          show(), goto(150, 60), set_size(45), clear_fx(),
-         say('Тебе не долететь, козочка!'), play_wait('голос_6'), say(''),
+         say('Тебе не долететь, козочка!'), play('голос_6'),
+         wait(dur(f'{V}/06_storm.mp3')), say(''),
          hide())
 mt.script(when_bcast('Акт3'),
          show(), goto(160, 50), set_size(45), clear_fx(), point_dir(90),
@@ -446,14 +454,18 @@ dm.script(when_bcast('Сброс'), hide())
 dm.script(when_bcast('Стоп'), hide())
 dm.script(when_bcast('Реп1'),
          show(), goto(-60, -55), set_size(42), costume('дедмороз'),
-         say('До Нового года остаётся ровно две минуты…'), play_wait('голос_1'), say(''))
+         say('До Нового года две минуты!'), play('голос_1'),
+         wait(dur(f'{V}/01_narrator.mp3')), say(''))
 dm.script(when_bcast('Реп2'),
-         say('Мила, посылка №2027 так и не доставлена!'), play_wait('голос_2'), say(''))
+         say('Мила, посылка №2027 не доставлена!'), play('голос_2'),
+         wait(dur(f'{V}/02_santa.mp3')), say(''))
 dm.script(when_bcast('Реп8'),
          show(), goto(-95, -80), set_size(40),
-         say('Ты успела, Мила! С Новым 2027 годом!'), play_wait('голос_8'), say(''))
+         say('Ты успела, Мила! С Новым 2027 годом!'), play('голос_8'),
+         wait(dur(f'{V}/08_final.mp3')), say(''))
 dm.script(when_bcast('Реп10'),
-         say('Спасибо тебе, маленькая козочка. Праздник спасён!'), play_wait('голос_10'), say(''))
+         say('Спасибо тебе, козочка. Праздник спасён!'), play('голос_10'),
+         wait(dur(f'{V}/10_outro.mp3')), say(''))
 dm.script(when_bcast('Акт3'), hide())
 
 # =================================================================  СНЕГОВИК
@@ -468,7 +480,8 @@ sm.script(when_bcast('Сброс'), hide())
 sm.script(when_bcast('Стоп'), hide())
 sm.script(when_bcast('Реп4'),
          show(), goto(110, -80), set_size(26),
-         say('Полозья смазаны, шеф! Сани готовы!'), play_wait('голос_4'), say(''))
+         say('Полозья смазаны, шеф! Держись!'), play('голос_4'),
+         wait(dur(f'{V}/04_snowman.mp3')), say(''))
 sm.script(when_bcast('Акт1'), hide())
 
 # ====================================================================  СОВА
@@ -538,9 +551,15 @@ ek.size = 34
 ek.x, ek.y = 0, 40
 ek.visible = False
 ek.script(when_flag(), hide())
+ek.script(when_bcast('Старт'),
+         to_front(), goto(0, 55), set_size(34), costume('титр'),
+         set_effect('GHOST', 100), show(),
+         repeat(10, change_effect('GHOST', -10), wait(0.03)))
 ek.script(when_bcast('Сброс'), hide(), clear_fx())
 ek.script(when_bcast('Стоп'), hide())
 ek.script(when_bcast('Затемнить'), hide())
+# запасной путь запуска: если что-то пошло не так, клик по титру перезапускает игру
+ek.script(when_clicked(), bcast('Рестарт'))
 ek.script(when_bcast('Акт1'), hide())
 ek.script(when_bcast('Акт2'), hide())
 ek.script(when_bcast('Акт3'), hide())
@@ -555,14 +574,22 @@ ek.script(when_bcast('Проигрыш'),
          repeat(10, change_effect('GHOST', -10), wait(0.03)))
 
 hint = Target('Подсказка')
-hint.costume('подсказка', f'{U}/hint.png')
-hint.size = 16
-hint.x, hint.y = 0, -150
+for n in (1, 2, 3):
+    hint.costume(f'акт{n}', f'{U}/hint{n}.png')
+hint.size = 31
+hint.x, hint.y = 0, -134
 hint.visible = False
 hint.script(when_flag(), hide())
 hint.script(when_bcast('Сброс'), hide())
-hint.script(when_bcast('Реп4'), show(), goto(0, -150), set_size(16), set_effect('GHOST', 0),
-            wait(6), repeat(10, change_effect('GHOST', 10), wait(0.05)), hide())
+# своя подсказка на каждый акт: управление в актах разное
+for n in (1, 2, 3):
+    hint.script(when_bcast(f'Акт{n}'),
+                to_front(), goto(0, -134), set_size(31), costume(f'акт{n}'),
+                set_effect('GHOST', 100), show(),
+                repeat(8, change_effect('GHOST', -12.5), wait(0.03)),
+                wait(4.5),
+                repeat(8, change_effect('GHOST', 12.5), wait(0.03)),
+                hide())
 
 # ===================================================================  2027
 y27 = Target('2027')
@@ -619,7 +646,8 @@ btn.script(when_bcast('Сброс'), hide())
 btn.script(when_bcast('Стоп'), hide())
 btn.script(when_bcast('Победа'), wait(2.6), show(), to_front(), goto(0, -95), set_size(30))
 btn.script(when_bcast('Проигрыш'), wait(1.6), show(), to_front(), goto(0, -110), set_size(30))
-btn.script(when_clicked(), if_(eq(var('игра'), 0), bcast('Рестарт')))
+btn.script(when_bcast('Рестарт'), hide())
+btn.script(when_clicked(), hide(), bcast('Рестарт'))
 
 bs = Target('КнопкаЗвук')
 bs.costume('вкл', f'{U}/btn_sound_on.png')
