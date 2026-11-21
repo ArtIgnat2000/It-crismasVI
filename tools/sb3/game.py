@@ -30,8 +30,15 @@ def dur(path):
     return round(count / max(rate, 1), 1) + 0.5
 
 
-GROUND = -95          # «пол» для героини (центр спрайта)
+# --- композиция сцены (см. docs/09-kompoziciya.md) ---------------------------
+# Сцена 480x360. Верхняя полоса (y>=112) — HUD, нижняя (y<=-130) — плашка
+# субтитров/подсказок. Игровая зона между ними: ноги персонажей на -126.
+# Пол поднят так, чтобы копыта/полозья/подол не заезжали на плашку: у Милы
+# рисунок смещён вниз внутри полотна 440x440, её «низ» — GROUND-53.8.
+GROUND = -80          # «пол» для героини (центр спрайта), ноги на -133.8
 HERO_SIZE = 26
+CAP_W, CAP_H = 960, 84   # плашка: PNG 960x84 px = 480x42 единицы
+CAP_Y = -157             # центр плашки: занимает y от -178 до -136
 
 
 # --- недостающие в sb.py блоки
@@ -212,13 +219,13 @@ h.script(when_bcast('Акт1'),
 
 # --- Акт 2: полёт на санях, управление вверх/вниз
 h.script(when_bcast('Акт2'),
-         show(), set_size(HERO_SIZE), goto(-130, -70), point_dir(90),
+         show(), set_size(HERO_SIZE), goto(-130, -60), point_dir(90),
          costume('run'), set_effect('GHOST', 0),
          until(not_act(2),
                if_(key('up arrow'), change_y(3.4)),
                if_(key('down arrow'), change_y(-3.4)),
                if_(gt(y_pos(), 95), set_y(95)),
-               if_(lt(y_pos(), -150), set_y(-150)),
+               if_(lt(y_pos(), -75), set_y(-75)),
                ))
 
 # --- Акт 3: крыша, бег влево-вправо + прыжок
@@ -248,22 +255,20 @@ h.script(when_bcast('Хит'),
              repeat(14, set_effect('GHOST', 60), wait(0.09), set_effect('GHOST', 0), wait(0.09)),
              setv('неуязвим', 0)))
 
-h.script(when_bcast('Победа'), show(), clear_fx(), goto(-140, -110), set_size(32), costume('cheer'),
+h.script(when_bcast('Победа'), show(), clear_fx(), goto(118, -72), set_size(30), costume('cheer'),
          repeat(6, change_y(12), wait(0.09), change_y(-12), wait(0.09)))
 
-h.script(when_bcast('Проигрыш'), show(), clear_fx(), costume('idle'), set_effect('GHOST', 25))
+h.script(when_bcast('Проигрыш'), show(), clear_fx(), goto(-140, -80), set_size(HERO_SIZE),
+         costume('idle'), point_dir(90), set_effect('GHOST', 25))
 
-# --- реплики
-h.script(when_bcast('Реп1'), show(), goto(60, -88), set_size(HERO_SIZE),
+# --- реплики: текст показывает спрайт «Плашка» (субтитры внизу),
+#     здесь — только озвучка и мизансцена. Никаких облачков над сценой.
+h.script(when_bcast('Реп2'), show(), goto(95, -78), set_size(HERO_SIZE),
          costume('idle'), point_dir(90), clear_fx())
-h.script(when_bcast('Реп3'), say('Я успею!'),
-         play('голос_3'), wait(dur(f'{V}/03_goat_1.mp3')), say(''))
-h.script(when_bcast('Реп5'), say('Ещё одна звезда!'),
-         play('голос_5'), wait(dur(f'{V}/05_goat_2.mp3')), say(''))
-h.script(when_bcast('Реп7'), say('Смотрите, окно! Там ждут чудо!'),
-         play('голос_7'), wait(dur(f'{V}/07_goat_3.mp3')), say(''))
-h.script(when_bcast('Реп9'), say('Полночь… Я не успела. Но я попробую снова!'),
-         play('голос_9'), wait(dur(f'{V}/09_lose.mp3')), say(''))
+h.script(when_bcast('Реп3'), play('голос_3'))
+h.script(when_bcast('Реп5'), play('голос_5'))
+h.script(when_bcast('Реп7'), play('голос_7'))
+h.script(when_bcast('Реп9'), play('голос_9'))
 
 # ==================================================================  САНИ
 sl = Target('Сани')
@@ -274,12 +279,15 @@ sl.visible = False
 sl.script(when_flag(), hide())
 sl.script(when_bcast('Сброс'), hide())
 sl.script(when_bcast('Стоп'), hide())
-for n in (1, 2):
-    sl.script(when_bcast(f'Акт{n}'),
-             show(), set_size(38), to_front(),
-             until(not_act(n),
-                   goto(add(of_prop('Мила', 'x position'), -10), add(of_prop('Мила', 'y position'), -34)),
-                   ))
+# сани — только в акте 2 (полёт на санях). В акте 1 Мила бежит, сани под ногами
+# только мешали читать сцену (и уезжали за левый край).
+sl.script(when_bcast('Акт2'),
+         show(), set_size(30), to_back(),
+         until(not_act(2),
+               goto(add(of_prop('Мила', 'x position'), -6), add(of_prop('Мила', 'y position'), -14)),
+               ))
+sl.script(when_bcast('Акт1'), hide())
+sl.script(when_bcast('Акт3'), hide())
 
 # ================================================================  ПОДАРОК
 g = Target('Подарок')
@@ -290,15 +298,21 @@ g.visible = False
 g.script(when_flag(), hide())
 g.script(when_bcast('Сброс'), hide())
 g.script(when_bcast('Стоп'), hide())
+gift_spot = {1: (-34, 8, 9), 2: (-26, -18, 10), 3: (-34, 4, 9)}
 for n in (1, 2, 3):
+    gx, gy, gs = gift_spot[n]
     g.script(when_bcast(f'Акт{n}'),
-             show(), set_size(11),
+             show(), set_size(gs),
              until(not_act(n),
-                   goto(add(of_prop('Мила', 'x position'), -22), add(of_prop('Мила', 'y position'), 34)),
-                   repeat(20, change_effect('BRIGHTNESS', 2), wait(0.04),
-                          change_effect('BRIGHTNESS', -2), wait(0.04)),
+                   # в санях — впереди героини, в беге — за спиной: не висит в воздухе
+                   goto(add(of_prop('Мила', 'x position'), gx), add(of_prop('Мила', 'y position'), gy)),
                    ))
-g.script(when_bcast('Победа'), show(), goto(0, 40), set_size(40), play('магия'),
+    # мерцание — отдельным скриптом, иначе оно тормозило слежение
+    g.script(when_bcast(f'Акт{n}'),
+             until(not_act(n),
+                   repeat(10, change_effect('BRIGHTNESS', 2), wait(0.04),
+                          change_effect('BRIGHTNESS', -2), wait(0.04))))
+g.script(when_bcast('Победа'), show(), goto(-92, -92), set_size(12), play('магия'),
          repeat(30, turn_right(6), wait(0.03)))
 
 # ==================================================================  ЗВЕЗДА
@@ -313,7 +327,7 @@ st.script(when_bcast('Сброс'), hide())
 st.script(when_bcast('Стоп'), hide())
 st.script(when_bcast('Стоп'), delete_clone())
 
-for n, ymin, ymax, period in [(1, -95, -30, 1.0), (2, -130, 90, 0.85)]:
+for n, ymin, ymax, period in [(1, -116, -34, 1.0), (2, -100, 84, 0.85)]:
     # рассылки запускают обработчики и в клонах, поэтому клонирует только оригинал
     st.script(when_bcast(f'Акт{n}'),
              hide(),
@@ -329,7 +343,9 @@ for n, ymin, ymax, period in [(1, -95, -30, 1.0), (2, -130, 90, 0.85)]:
                     change_x(mul(-1, var('скорость'))),
                     turn_right(4),
                     if_(touching('Мила'), changev('звёзды', 1), play('подбор'), delete_clone()),
-                    ))
+                    ),
+              # без этого клоны копились за левым краем сцены (мусор к 70-й секунде)
+              delete_clone())
     
 # ==================================================================  СУГРОБ
 dr = Target('Сугроб')
@@ -350,11 +366,12 @@ dr.script(when_bcast('Акт1'),
                    wait(rnd(1.6, 2.6)),
                    )))
 dr.script(when_clone(), setv('клон', 1),
-         show(), set_size(rnd(16, 22)), goto(280, GROUND - 25),
+         show(), set_size(rnd(16, 20)), goto(280, -117),
          until(or_(lt(x_pos(), -280), not_act(1)),
                change_x(mul(-1, var('скорость'))),
                if_(and_(touching('Мила'), eq(var('неуязвим'), 0)), bcast('Хит'), delete_clone()),
-               ))
+               ),
+         delete_clone())
 
 # ===================================================================  ЁЛКА
 tr = Target('Ёлка')
@@ -375,12 +392,13 @@ tr.script(when_bcast('Акт2'),
                    wait(rnd(1.2, 1.9)),
                    )))
 tr.script(when_clone(), setv('клон', 1),
-         show(), set_size(rnd(24, 34)), goto(280, rnd(-150, 60)),
+         show(), set_size(rnd(24, 34)), goto(280, rnd(-90, 55)),
          until(or_(lt(x_pos(), -280), not_act(2)),
                change_x(mul(-1, var('скорость'))),
                turn_right(1),
                if_(and_(touching('Мила'), eq(var('неуязвим'), 0)), bcast('Хит'), delete_clone()),
-               ))
+               ),
+         delete_clone())
 
 # =================================================================  СНЕЖОК
 sn = Target('Снежок')
@@ -411,8 +429,10 @@ sn.script(when_clone(), setv('клон', 1),
 
 # ====================================================================  СНЕГ
 snow = Target('Снег')
-snow.costume('снежинка', f'{U}/stars_0.png')
-snow.size = 4
+# раньше здесь стоял stars_0.png — картинка HUD «★ 0», из-за неё по экрану
+# летали золотые звёздочки с нулями вместо снега
+snow.costume('снежинка', f'{U}/snowflake.png')
+snow.size = 8
 snow.visible = False
 snow.var('клон', 0)
 snow.script(when_flag(), hide())
@@ -422,7 +442,7 @@ snow.script(when_clone(), setv('клон', 1))
 snow.script(when_bcast('СнегИдёт'),
             if_(eq(var('клон'), 0), repeat(26, clone_self(), wait(0.02))))
 snow.script(when_clone(),
-            show(), set_size(rnd(2, 7)), set_effect('GHOST', rnd(20, 70)),
+            show(), set_size(rnd(5, 12)), set_effect('GHOST', rnd(25, 70)),
             goto(rnd(-250, 250), rnd(-180, 180)),
             forever(
                 change_y(mul(rnd(1, 3), -1)),
@@ -443,14 +463,12 @@ mt.script(when_flag(), hide())
 mt.script(when_bcast('Сброс'), hide(), clear_fx())
 mt.script(when_bcast('Стоп'), hide())
 mt.script(when_bcast('Реп6'),
-         show(), goto(150, 60), set_size(38), clear_fx(),
-         say('Тебе не долететь, козочка!'), play('голос_6'),
-         wait(dur(f'{V}/06_storm.mp3')), say(''),
-         hide())
+         show(), goto(140, 45), set_size(34), clear_fx(), point_dir(90),
+         play('голос_6'))
 mt.script(when_bcast('Акт3'),
-         show(), goto(160, 50), set_size(38), clear_fx(), point_dir(90),
+         show(), goto(150, 40), set_size(34), clear_fx(), point_dir(90),
          until(not_act(3),
-               set_y(rnd(10, 110)),
+               set_y(rnd(10, 88)),
                turn_right(rnd(-3, 3)),
                if_(eq(mod(var('время'), 4), 0), play('ветер')),
                wait(1.1),
@@ -467,21 +485,21 @@ dm.visible = False
 dm.script(when_flag(), hide())
 dm.script(when_bcast('Сброс'), hide())
 dm.script(when_bcast('Стоп'), hide())
-dm.script(when_bcast('Реп1'),
-         show(), goto(-60, -55), set_size(42), costume('дедмороз'),
-         say('До Нового года две минуты!'), play('голос_1'),
-         wait(dur(f'{V}/01_narrator.mp3')), say(''))
+# Пролог: реплику 1 говорит голос за кадром поверх титра — Дед Мороз ещё не вышел.
+# Выходит на реплике 2 слева и остаётся до акта. В актах 1–2 его на сцене НЕТ
+# (раньше он стоял посреди улицы до самой крыши).
+dm.script(when_bcast('Реп1'), hide(), play('голос_1'))
 dm.script(when_bcast('Реп2'),
-         say('Мила, посылка №2027 не доставлена!'), play('голос_2'),
-         wait(dur(f'{V}/02_santa.mp3')), say(''))
+         show(), goto(-120, -60), set_size(34), costume('дедмороз'), point_dir(90),
+         play('голос_2'))
 dm.script(when_bcast('Реп8'),
-         show(), goto(-95, -80), set_size(40),
-         say('Ты успела, Мила! С Новым 2027 годом!'), play('голос_8'),
-         wait(dur(f'{V}/08_final.mp3')), say(''))
-dm.script(when_bcast('Реп10'),
-         say('Спасибо тебе, козочка. Праздник спасён!'), play('голос_10'),
-         wait(dur(f'{V}/10_outro.mp3')), say(''))
+         show(), goto(-140, -75), set_size(28), costume('дедмороз'), point_dir(90),
+         play('голос_8'))
+dm.script(when_bcast('Реп10'), play('голос_10'))
+dm.script(when_bcast('Акт1'), hide())
+dm.script(when_bcast('Акт2'), hide())
 dm.script(when_bcast('Акт3'), hide())
+dm.script(when_bcast('Проигрыш'), hide())
 
 # =================================================================  СНЕГОВИК
 sm = Target('Снеговик')
@@ -494,9 +512,8 @@ sm.script(when_flag(), hide())
 sm.script(when_bcast('Сброс'), hide())
 sm.script(when_bcast('Стоп'), hide())
 sm.script(when_bcast('Реп4'),
-         show(), goto(110, -80), set_size(22),
-         say('Полозья смазаны, шеф! Держись!'), play('голос_4'),
-         wait(dur(f'{V}/04_snowman.mp3')), say(''))
+         show(), goto(185, -88), set_size(18), point_dir(-90),
+         play('голос_4'))
 sm.script(when_bcast('Акт1'), hide())
 
 # ====================================================================  СОВА
@@ -519,15 +536,16 @@ ov.script(when_bcast('Акт2'),
 # ===================================================================  ЧАСЫ
 cf = Target('Часы_циферблат')
 cf.costume('часы', f'{U}/clock_face.png')
-cf.size = 22
-cf.x, cf.y = 190, 130
-cf.script(when_flag(), show(), to_front(), set_size(22), goto(190, 130))
+cf.size = 20
+cf.x, cf.y = 196, 126
+cf.script(when_flag(), show(), to_front(), set_size(20), goto(196, 126))
 
 ch = Target('Часы_стрелка')
-ch.costume('стрелка', f'{U}/clock_hand.png')
-ch.size = 22
-ch.x, ch.y = 190, 130
-ch.script(when_flag(), show(), to_front(), set_size(22), goto(190, 130),
+# ось вращения — у красного «грузика» (низ картинки), иначе стрелка торчит наружу
+ch.costume('стрелка', f'{U}/clock_hand.png', center=(12, 156))
+ch.size = 16
+ch.x, ch.y = 196, 126
+ch.script(when_flag(), show(), to_front(), set_size(16), goto(196, 126),
           forever(point_dir(mul(var('время'), 2.4))))
 
 # ====================================================================  HUD
@@ -535,8 +553,8 @@ lv = Target('Жизни')
 for n in range(4):
     lv.costume(f'жизни_{n}', f'{U}/lives_{n}.png')
 lv.size = 22
-lv.x, lv.y = -195, 128
-lv.script(when_flag(), show(), to_front(), set_size(22), goto(-195, 128),
+lv.x, lv.y = -196, 130
+lv.script(when_flag(), show(), to_front(), set_size(22), goto(-196, 130),
           forever(
               if_(eq(var('жизни'), 3), costume('жизни_3')),
               if_(eq(var('жизни'), 2), costume('жизни_2')),
@@ -548,13 +566,14 @@ sc = Target('Счёт')
 for n in range(14):
     sc.costume(f'{n}', f'{U}/stars_{n}.png')
 sc.size = 16
-sc.x, sc.y = 150, 128
-sc.script(when_flag(), show(), to_front(), set_size(16), goto(150, 128))
+sc.x, sc.y = 140, 126
+sc.script(when_flag(), show(), to_front(), set_size(16), goto(140, 126))
 branches = []
 for n in range(14):
     branches.append(if_(eq(var('звёзды'), n), costume(f'{n}')))
 branches.append(if_(gt(var('звёзды'), 13), costume('13')))
 sc.script(when_flag(), forever(*branches))
+sc.script(when_bcast('Победа'), hide())
 
 # ==================================================================  ЭКРАН
 ek = Target('Экран')
@@ -566,10 +585,14 @@ ek.size = 34
 ek.x, ek.y = 0, 40
 ek.visible = False
 ek.script(when_flag(), hide())
-ek.script(when_bcast('Старт'),
-         to_front(), goto(0, 55), set_size(34), costume('титр'),
+# Титр живёт только на первой реплике (голос за кадром) и уходит в фейд,
+# как только Дед Мороз выходит на сцену. Раньше он висел поверх героев и облачка.
+ek.script(when_bcast('Реп1'),
+         to_front(), goto(0, 58), set_size(34), costume('титр'),
          set_effect('GHOST', 100), show(),
          repeat(10, change_effect('GHOST', -10), wait(0.03)))
+ek.script(when_bcast('Реп2'),
+         repeat(10, change_effect('GHOST', 10), wait(0.03)), hide())
 ek.script(when_bcast('Сброс'), hide(), clear_fx())
 ek.script(when_bcast('Стоп'), hide())
 ek.script(when_bcast('Затемнить'), hide())
@@ -578,33 +601,76 @@ ek.script(when_clicked(), bcast('Рестарт'))
 ek.script(when_bcast('Акт1'), hide())
 ek.script(when_bcast('Акт2'), hide())
 ek.script(when_bcast('Акт3'), hide())
-ek.script(when_bcast('Реп1'),
-         show(), goto(0, 55), set_size(34), costume('титр'), set_effect('GHOST', 100),
-         repeat(10, change_effect('GHOST', -10), wait(0.03)))
 ek.script(when_bcast('Победа'),
-         show(), goto(0, 100), set_size(30), costume('победа'), set_effect('GHOST', 100),
+         show(), goto(0, 124), set_size(24), costume('победа'), set_effect('GHOST', 100),
          repeat(10, change_effect('GHOST', -10), wait(0.03)))
 ek.script(when_bcast('Проигрыш'),
-         show(), goto(0, 80), set_size(26), costume('проигрыш'), set_effect('GHOST', 100),
+         show(), goto(0, 96), set_size(24), costume('проигрыш'), set_effect('GHOST', 100),
          repeat(10, change_effect('GHOST', -10), wait(0.03)))
 
-hint = Target('Подсказка')
+# =================================================================  ПЛАШКА
+# ЕДИНЫЙ спрайт для ВСЕХ надписей внизу сцены: подсказки актов и субтитры реплик.
+# Это принципиально: раньше облачка Scratch рисовались над спрайтами и наезжали
+# на титр, персонажей и подсказки. Теперь текст — статичная картинка в нижней
+# полосе, а сцена остаётся чистой. Одна точка, один размер => наезд невозможен.
+cap = Target('Плашка')
+# res=2: плашка нарисована в 2x (960 px = 480 единиц) — при res=1 она была бы
+# шириной в два экрана, и Scratch клампил бы размер
 for n in (1, 2, 3):
-    hint.costume(f'акт{n}', f'{U}/hint{n}.png')
-hint.size = 31
-hint.x, hint.y = 0, -134
-hint.visible = False
-hint.script(when_flag(), hide())
-hint.script(when_bcast('Сброс'), hide())
-# своя подсказка на каждый акт: управление в актах разное
+    cap.costume(f'акт{n}', f'{U}/hint{n}.png', res=2)
+for n in range(1, 11):
+    cap.costume(f'реплика{n}', f'{U}/cap{n}.png', res=2)
+cap.size = 100
+cap.x, cap.y = 0, CAP_Y
+cap.visible = False
+cap.script(when_flag(), hide())
+cap.script(when_bcast('Сброс'), hide(), clear_fx())
+cap.script(when_bcast('Стоп'), hide())
+cap.script(when_bcast('Затемнить'), hide())
+
+# подсказки по управлению: своя на каждый акт (управление разное)
 for n in (1, 2, 3):
-    hint.script(when_bcast(f'Акт{n}'),
-                to_front(), goto(0, -134), set_size(31), costume(f'акт{n}'),
-                set_effect('GHOST', 100), show(),
-                repeat(8, change_effect('GHOST', -12.5), wait(0.03)),
-                wait(4.5),
-                repeat(8, change_effect('GHOST', 12.5), wait(0.03)),
-                hide())
+    cap.script(when_bcast(f'Акт{n}'),
+               to_front(), goto(0, CAP_Y), set_size(100), costume(f'акт{n}'),
+               set_effect('GHOST', 100), show(),
+               repeat(6, change_effect('GHOST', -16.7), wait(0.03)),
+               wait(4.2),
+               repeat(6, change_effect('GHOST', 16.7), wait(0.03)),
+               hide())
+
+# субтитры реплик: держатся ровно столько, сколько звучит озвучка
+VOICE = {1: '01_narrator', 2: '02_santa', 3: '03_goat_1', 4: '04_snowman',
+         5: '05_goat_2', 6: '06_storm', 7: '07_goat_3', 8: '08_final',
+         9: '09_lose', 10: '10_outro'}
+for n, fn in VOICE.items():
+    cap.script(when_bcast(f'Реп{n}'),
+               to_front(), goto(0, CAP_Y), set_size(100), costume(f'реплика{n}'),
+               set_effect('GHOST', 100), show(),
+               repeat(6, change_effect('GHOST', -16.7), wait(0.03)),
+               wait(dur(f'{V}/{fn}.mp3')),
+               repeat(6, change_effect('GHOST', 16.7), wait(0.03)),
+               hide())
+
+# ================================================================  ПОДПИСЬ
+# Вторая строка под финальными титрами (есть в ассетах, раньше не использовалась).
+# Отдельный спрайт, потому что должна висеть одновременно с титром.
+sub = Target('Подпись')
+sub.costume('год', f'{U}/s2027_sub.png')
+sub.costume('провал', f'{U}/lose_sub.png')
+sub.size = 30
+sub.visible = False
+sub.script(when_flag(), hide())
+sub.script(when_bcast('Сброс'), hide())
+sub.script(when_bcast('Стоп'), hide())
+sub.script(when_bcast('Затемнить'), hide())
+sub.script(when_bcast('Победа'),
+           to_front(), goto(0, 6), set_size(34), costume('год'),
+           set_effect('GHOST', 100), show(),
+           repeat(10, change_effect('GHOST', -10), wait(0.03)))
+sub.script(when_bcast('Проигрыш'),
+           to_front(), goto(0, 52), set_size(30), costume('провал'),
+           set_effect('GHOST', 100), show(),
+           repeat(10, change_effect('GHOST', -10), wait(0.03)))
 
 # ===================================================================  2027
 y27 = Target('2027')
@@ -616,13 +682,13 @@ y27.script(when_flag(), hide())
 y27.script(when_bcast('Сброс'), hide())
 y27.script(when_bcast('Стоп'), hide())
 y27.script(when_bcast('Победа'),
-            wait(0.4), show(), goto(90, -10), set_size(10), clear_fx(), play('магия'),
-            repeat(12, change_size(6), wait(0.03)),
+            wait(0.4), show(), goto(0, 64), set_size(10), clear_fx(), play('магия'),
+            repeat(12, change_size(2), wait(0.03)),
             repeat(80, change_effect('COLOR', 3), wait(0.03)))
 
 # ================================================================  ФЕЙЕРВЕРК
 fw = Target('Фейерверк')
-fw.costume('искра', f'{U}/stars_0.png')
+fw.costume('искра', f'{U}/spark.png')
 fw.sound('салют', f'{F}/sfx_firework.mp3')
 fw.size = 8
 fw.visible = False
@@ -635,7 +701,7 @@ fw.script(when_bcast('Победа'),
          hide(), wait(0.3),
          if_(eq(var('клон'), 0), repeat(10, clone_self(), wait(0.22))))
 fw.script(when_clone(), setv('клон', 1),
-         show(), goto(rnd(-180, 180), rnd(0, 120)), set_size(rnd(6, 12)),
+         show(), goto(rnd(-170, 170), rnd(-20, 100)), set_size(rnd(9, 16)),
          set_effect('COLOR', rnd(0, 100)), play('салют'), point_dir(rnd(0, 360)),
          repeat(24, move_steps(4), turn_right(15), change_effect('GHOST', 4), change_size(-0.2), wait(0.02)),
          delete_clone())
@@ -654,23 +720,23 @@ fd.script(when_bcast('Осветлить'), to_front(),
 # ===================================================================  КНОПКИ
 btn = Target('Кнопка')
 btn.costume('ещё_раз', f'{U}/btn_retry.png')
-btn.size = 30
-btn.x, btn.y = 0, -95
+btn.size = 46
+btn.x, btn.y = 0, -112
 btn.visible = False
 btn.script(when_flag(), hide())
 btn.script(when_bcast('Сброс'), hide())
 btn.script(when_bcast('Стоп'), hide())
-btn.script(when_bcast('Победа'), wait(2.6), show(), to_front(), goto(0, -95), set_size(30))
-btn.script(when_bcast('Проигрыш'), wait(1.6), show(), to_front(), goto(0, -110), set_size(30))
+btn.script(when_bcast('Победа'), wait(2.6), show(), to_front(), goto(0, -112), set_size(46))
+btn.script(when_bcast('Проигрыш'), wait(1.6), show(), to_front(), goto(0, -112), set_size(46))
 btn.script(when_bcast('Рестарт'), hide())
 btn.script(when_clicked(), hide(), bcast('Рестарт'))
 
 bs = Target('КнопкаЗвук')
 bs.costume('вкл', f'{U}/btn_sound_on.png')
 bs.costume('выкл', f'{U}/btn_sound_off.png')
-bs.size = 14
-bs.x, bs.y = -150, -165
-bs.script(when_flag(), show(), to_front(), goto(-150, -165), set_size(14),
+bs.size = 22
+bs.x, bs.y = -206, 152
+bs.script(when_flag(), show(), to_front(), goto(-206, 152), set_size(22),
           forever(if_(eq(var('звук_вкл'), 1), costume('вкл')),
                   if_(eq(var('звук_вкл'), 0), costume('выкл'))))
 bs.script(when_clicked(),
@@ -710,6 +776,6 @@ for idx, name in [(1, 'мастерская'), (2, 'город'), (3, 'лес'),
 def build_project():
     p = Project()
     for t in [stage, d, mz, snow, tr, dr, sn, st, sl, h, g, ov, sm, dm, mt,
-              cf, ch, lv, sc, ek, hint, y27, fw, fd, btn, bs]:
+              cf, ch, lv, sc, ek, sub, cap, y27, fw, fd, btn, bs]:
         p.add(t)
     return p
