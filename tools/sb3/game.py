@@ -163,10 +163,9 @@ d.script(
     setv('время', 150), setv('победа', 0), setv('неуязвим', 0),
     setv('скорость', 6), setv('ветер', 0.4), setv('осталось', 0),
     setv('музыка', 0), bcast('МузыкаСтоп'), wait(0.06),
-    bcast('Сброс'), wait(0.4),
+    bcast('Сброс'), backdrop('мастерская'), wait(0.4),
     bcast('СнегИдёт'),
     setv('игра', 1),
-    backdrop('мастерская'),
     setv('музыка', 1),
     bcast_wait('Реп1'), bcast_wait('Реп2'), bcast_wait('Реп3'), bcast_wait('Реп4'),
     act1,
@@ -238,7 +237,7 @@ h.script(when_bcast('Акт2'),
                if_(key('up arrow'), change_y(3.4)),
                if_(key('down arrow'), change_y(-3.4)),
                if_(gt(y_pos(), 95), set_y(95)),
-               if_(lt(y_pos(), -75), set_y(-75)),
+               if_(lt(y_pos(), -54), set_y(-54)),
                wait(0)))
 
 # --- Акт 3: крыша, бег влево-вправо + прыжок
@@ -292,14 +291,20 @@ sl.visible = False
 sl.script(when_flag(), hide())
 sl.script(when_bcast('Сброс'), hide())
 sl.script(when_bcast('Стоп'), hide())
-# сани — только в акте 2 (полёт на санях). В акте 1 Мила бежит, сани под ногами
-# только мешали читать сцену (и уезжали за левый край).
+# сани — транспорт для доставки посылки. В акте 1 Мила бежит, сани следуют за
+# ней по земле и прыгают вместе с ней через сугробы (результат сперва висел
+# в воздухе над Миной: offset по y был -14 вместо -43). В акте 2 — полёт на
+# санях через лес: платформа саней точно под ногами Милы.
+sl.script(when_bcast('Акт1'),
+         show(), set_size(15), to_back(),
+         until(not_act(1),
+               goto(add(of_prop('Мила', 'x position'), -60), add(of_prop('Мила', 'y position'), -38.4)),
+               wait(0)))
 sl.script(when_bcast('Акт2'),
          show(), set_size(30), to_back(),
          until(not_act(2),
-               goto(add(of_prop('Мила', 'x position'), -6), add(of_prop('Мила', 'y position'), -14)),
+               goto(add(of_prop('Мила', 'x position'), -6), add(of_prop('Мила', 'y position'), -51)),
                wait(0)))
-sl.script(when_bcast('Акт1'), hide())
 sl.script(when_bcast('Акт3'), hide())
 
 # ================================================================  ПОДАРОК
@@ -311,7 +316,7 @@ g.visible = False
 g.script(when_flag(), hide())
 g.script(when_bcast('Сброс'), hide())
 g.script(when_bcast('Стоп'), hide())
-gift_spot = {1: (-34, 8, 9), 2: (-26, -18, 10), 3: (-34, 4, 9)}
+gift_spot = {1: (-34, 8, 9), 2: (8, -61, 10), 3: (-34, 4, 9)}
 for n in (1, 2, 3):
     gx, gy, gs = gift_spot[n]
     g.script(when_bcast(f'Акт{n}'),
@@ -359,7 +364,7 @@ st.script(when_clone(), setv('клон', 1), show(), set_size(rnd(11, 14)), poin
           # высота под акт: в первом акте только та, до которой Мила достаёт прыжком
           ifelse(eq(var('акт'), 1),
                  [goto(270, rnd(-100, -20))],
-                 [goto(270, rnd(-58, 62))]),
+                 [goto(270, rnd(-52, 62))]),
           until(or_(lt(x_pos(), -270), eq(var('акт'), 0)),
                 change_x(mul(-1, var('скорость'))),
                 turn_right(4),
@@ -569,6 +574,7 @@ cf.costume('часы', f'{U}/clock_face.png')
 cf.size = 20
 cf.x, cf.y = 196, 126
 cf.script(when_flag(), show(), to_front(), set_size(20), goto(196, 126))
+cf.script(when_bcast('Сброс'), show(), to_front(), set_size(20), goto(196, 126))
 
 ch = Target('Часы_стрелка')
 # ось вращения — у красного «грузика» (низ картинки), иначе стрелка торчит наружу
@@ -577,6 +583,7 @@ ch.size = 16
 ch.x, ch.y = 196, 126
 ch.script(when_flag(), show(), to_front(), set_size(16), goto(196, 126),
           forever(point_dir(mul(var('время'), 2.4))))
+ch.script(when_bcast('Сброс'), show(), to_front(), set_size(16), goto(196, 126))
 
 # ====================================================================  HUD
 lv = Target('Жизни')
@@ -584,6 +591,7 @@ for n in range(4):
     lv.costume(f'жизни_{n}', f'{U}/lives_{n}.png')
 lv.size = 22
 lv.x, lv.y = -196, 130
+lv.script(when_bcast('Сброс'), show(), to_front(), set_size(22), goto(-196, 130))
 lv.script(when_flag(), show(), to_front(), set_size(22), goto(-196, 130),
           forever(
               if_(eq(var('жизни'), 3), costume('жизни_3')),
@@ -598,6 +606,9 @@ for n in range(14):
 sc.size = 16
 sc.x, sc.y = 140, 126
 sc.script(when_flag(), show(), to_front(), set_size(16), goto(140, 126))
+# БАГ 1.7: «Счёт» скрывался на «Победа» и после «Ещё раз» больше не показывался
+# (when_flag не перезапускается). Сброс явно возвращает его на место.
+sc.script(when_bcast('Сброс'), show(), to_front(), set_size(16), goto(140, 126))
 branches = []
 for n in range(14):
     branches.append(if_(eq(var('звёзды'), n), costume(f'{n}')))
@@ -742,10 +753,30 @@ fd.costume('чёрный', f'{U}/fade.png')
 fd.size = 100
 fd.visible = True
 fd.script(when_flag(), to_front(), set_size(100), set_effect('GHOST', 100), goto(0, 0))
+# затмение-спрайт явно сбрасывается: после «Ещё раз» фад-переход не оставляет
+# чёрного экрана (состояние строго равно старту по флагу)
+fd.script(when_bcast('Сброс'), to_front(), set_size(100), set_effect('GHOST', 100), goto(0, 0))
 fd.script(when_bcast('Затемнить'), to_front(), set_size(100), set_effect('GHOST', 100),
           repeat(8, change_effect('GHOST', -12.5), wait(0.03)))
 fd.script(when_bcast('Осветлить'), to_front(),
           repeat(8, change_effect('GHOST', 12.5), wait(0.03)))
+
+# ==========================================================  ОБРАТНЫЙ ОТСЧЁТ
+# Цель третьего акта на табло: счётчик 20 -> 0 в верхней полосе HUD. Раньше
+# переменная «осталось» считалась, но на экране её не было — цель акта 3
+# была невидима и неизмерима.
+cd = Target('Обратный отсчёт')
+for n in range(21):
+    cd.costume(f'{n}', f'{U}/count_{n}.png')
+cd.size = 22
+cd.x, cd.y = 0, 130
+cd.visible = False
+cd.script(when_flag(), hide())
+cd.script(when_bcast('Сброс'), hide())
+cd.script(when_bcast('Стоп'), hide())
+cd.script(when_bcast('Акт3'),
+          show(), to_front(), set_size(22), goto(245, 190),
+          forever(*[if_(eq(var('осталось'), n), costume(f'{n}')) for n in range(20, -1, -1)]))
 
 # ===================================================================  КНОПКИ
 btn = Target('Кнопка')
@@ -769,6 +800,7 @@ bs.x, bs.y = -206, 152
 bs.script(when_flag(), show(), to_front(), goto(-206, 152), set_size(22),
           forever(if_(eq(var('звук_вкл'), 1), costume('вкл')),
                   if_(eq(var('звук_вкл'), 0), costume('выкл'))))
+bs.script(when_bcast('Сброс'), show(), to_front(), goto(-206, 152), set_size(22))
 bs.script(when_clicked(),
           ifelse(eq(var('звук_вкл'), 1),
                  [setv('звук_вкл', 0), stop_sounds()],
@@ -806,6 +838,6 @@ for idx, name in [(1, 'мастерская'), (2, 'город'), (3, 'лес'),
 def build_project():
     p = Project()
     for t in [stage, d, mz, snow, tr, dr, sn, st, sl, h, g, ov, sm, dm, mt,
-              cf, ch, lv, sc, ek, sub, cap, y27, fw, fd, btn, bs]:
+              cf, ch, lv, sc, cd, ek, sub, cap, y27, fw, fd, btn, bs]:
         p.add(t)
     return p
