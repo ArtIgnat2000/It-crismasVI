@@ -516,6 +516,8 @@ vm.loadProject(fs.readFileSync(file)).then(() => {
         shot('02_prolog_dialog');           // Дед Мороз и Мила на сцене
         sec(3.2);
         shot('03_prolog_dialog_mila');
+        sec(3.0);
+        shot('03b_prolog_snowman');         // реплика 4: выходит снеговик (проверка «не вверх ногами»)
         waitAct(1);
         sec(2.4);
         shot('04_act1_start');              // подсказка акта 1

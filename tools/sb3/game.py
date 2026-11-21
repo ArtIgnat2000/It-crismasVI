@@ -107,7 +107,7 @@ d.script(when_flag(),
 d.script(when_bcast('Рестарт'), bcast('Старт'))
 
 act1 = [
-    setv('акт', 1), setv('скорость', 6),
+    setv('акт', 1), setv('скорость', 4.2),
     setv('музыка', 0), bcast('МузыкаСтоп'), wait(0.06), setv('музыка', 2),
     bcast_wait('Затемнить'), backdrop('город'), bcast_wait('Осветлить'),
     bcast('Акт1'),
@@ -117,7 +117,7 @@ act1 = [
 ]
 
 act2 = [
-    setv('акт', 2), setv('скорость', 7.5),
+    setv('акт', 2), setv('скорость', 6.5),
     # каждый акт — свой заход: сердечки восстанавливаются, счёт звёзд начинается с 0,
     # чтобы на табло всегда было видно «сколько ещё до цели» (5 звёзд за акт)
     setv('жизни', 3), setv('звёзды', 0),
@@ -129,7 +129,7 @@ act2 = [
 ]
 
 act3 = [
-    setv('акт', 3), setv('скорость', 7), setv('осталось', 20),
+    setv('акт', 3), setv('скорость', 6), setv('осталось', 20),
     setv('жизни', 3),
     setv('музыка', 0), bcast('МузыкаСтоп'), wait(0.06), setv('музыка', 4),
     bcast_wait('Затемнить'), backdrop('крыша'), bcast_wait('Осветлить'),
@@ -340,7 +340,7 @@ st.script(when_bcast('Сброс'), hide())
 st.script(when_bcast('Стоп'), hide())
 st.script(when_bcast('Стоп'), delete_clone())
 
-for n, period in [(1, 1.0), (2, 0.85)]:
+for n, period in [(1, 0.9), (2, 0.8)]:
     # рассылки запускают обработчики и в клонах, поэтому клонирует только оригинал
     st.script(when_bcast(f'Акт{n}'),
              hide(),
@@ -355,10 +355,10 @@ for n, period in [(1, 1.0), (2, 0.85)]:
 # по актам, в спрайте оказывались два одинаковых «когда я — клон»: второй
 # (для акта 2) в первом акте сразу видел «акт <> 2», выходил из цикла и удалял
 # звезду в момент рождения — поэтому звёзды не долетали до Милы.
-st.script(when_clone(), setv('клон', 1), show(), set_size(rnd(9, 12)), point_dir(0),
+st.script(when_clone(), setv('клон', 1), show(), set_size(rnd(11, 14)), point_dir(0),
           # высота под акт: в первом акте только та, до которой Мила достаёт прыжком
           ifelse(eq(var('акт'), 1),
-                 [goto(270, rnd(-112, -20))],
+                 [goto(270, rnd(-100, -20))],
                  [goto(270, rnd(-58, 62))]),
           until(or_(lt(x_pos(), -270), eq(var('акт'), 0)),
                 change_x(mul(-1, var('скорость'))),
@@ -384,14 +384,15 @@ dr.script(when_bcast('Акт1'),
              wait(1.6),
              until(not_act(1),
                    clone_self(),
-                   wait(rnd(1.8, 2.8)),
+                   wait(rnd(3.2, 4.4)),
                    )))
 dr.script(when_clone(), setv('клон', 1),
          show(), set_size(rnd(14, 17)), goto(280, -116),
          until(or_(lt(x_pos(), -280), not_act(1)),
                change_x(mul(-1, var('скорость'))),
                # заденет, только если Мила низко (прыжок переносит её через сугроб)
-               if_(and_(and_(near_x('Мила', 26), lt(of_prop('Мила', 'y position'), GROUND + 30)),
+               # задевает, ТОЛЬКО пока Мила стоит на земле: любой прыжок спасает
+               if_(and_(and_(near_x('Мила', 20), lt(of_prop('Мила', 'y position'), GROUND + 2)),
                         eq(var('неуязвим'), 0)),
                    bcast('Хит'), delete_clone()),
                wait(0)),
@@ -413,7 +414,7 @@ tr.script(when_bcast('Акт2'),
              wait(1.4),
              until(not_act(2),
                    clone_self(),
-                   wait(rnd(2.2, 3.0)),
+                   wait(rnd(2.6, 3.4)),
                    )))
 tr.script(when_clone(), setv('клон', 1),
          show(), set_size(rnd(12, 15)), goto(280, rnd(-100, -66)),
@@ -442,13 +443,13 @@ sn.script(when_bcast('Акт3'),
              wait(1.0),
              until(not_act(3),
                    clone_self(),
-                   wait(rnd(0.9, 1.5)),
+                   wait(rnd(1.3, 2.0)),
                    )))
 sn.script(when_clone(), setv('клон', 1),
          show(), goto(of_prop('Метель', 'x position'), of_prop('Метель', 'y position')),
          point_towards('Мила'), turn_right(rnd(-12, 12)),
          until(or_(touching('_edge_'), not_act(3)),
-               move_steps(8),
+               move_steps(6.5),
                if_(touching('Мила'), play('снежок_удар'), bcast('Хит'), delete_clone()),
                wait(0)))
 
@@ -507,6 +508,7 @@ for nm, fn in [('голос_1', '01_narrator'), ('голос_2', '02_santa'),
     dm.sound(nm, f'{V}/{fn}.mp3')
 dm.size = 42
 dm.visible = False
+dm.rotation_style = 'left-right'
 dm.script(when_flag(), hide())
 dm.script(when_bcast('Сброс'), hide())
 dm.script(when_bcast('Стоп'), hide())
@@ -533,6 +535,9 @@ sm.sound('голос_4', f'{V}/04_snowman.mp3')
 sm.sound('скрип', f'{F}/sfx_step.mp3')
 sm.size = 20
 sm.visible = False
+# без этого «повернуть в направление -90» крутило снеговика на 180° —
+# в прологе он стоял вверх ногами (стиль «влево-вправо» только отражает спрайт)
+sm.rotation_style = 'left-right'
 sm.script(when_flag(), hide())
 sm.script(when_bcast('Сброс'), hide())
 sm.script(when_bcast('Стоп'), hide())
