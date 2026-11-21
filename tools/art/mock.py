@@ -50,7 +50,7 @@ def titles():
     put(f, f'{R}/art/sprites/goat_run.png', -150, -95, 26)
     put(f, f'{R}/art/sprites/gift.png', -172, -61, 18)
     hud(f, 3, 5)
-    put(f, f'{R}/art/ui/hint1.png', 0, -134, 36)
+    put(f, f'{R}/art/ui/hint1.png', 0, -134, 31)
     f.convert('RGB').save(f'{OUT}/02_act1.jpg', quality=90)
 
     # 3. Акт 2 — лес
@@ -62,7 +62,7 @@ def titles():
     put(f, f'{R}/art/sprites/goat_run.png', -130, -70, 26)
     put(f, f'{R}/art/sprites/gift.png', -152, -36, 18)
     hud(f, 2, 8)
-    put(f, f'{R}/art/ui/hint2.png', 0, -134, 36)
+    put(f, f'{R}/art/ui/hint2.png', 0, -134, 31)
     f.convert('RGB').save(f'{OUT}/03_act2.jpg', quality=90)
 
     # 4. Акт 3 — крыша, метель
@@ -72,7 +72,7 @@ def titles():
     put(f, f'{R}/art/sprites/goat_run.png', -150, -95, 26)
     put(f, f'{R}/art/sprites/gift.png', -172, -61, 18)
     hud(f, 2, 10)
-    put(f, f'{R}/art/ui/hint3.png', 0, -134, 36)
+    put(f, f'{R}/art/ui/hint3.png', 0, -134, 31)
     f.convert('RGB').save(f'{OUT}/04_act3.jpg', quality=90)
 
     # 5. Победа

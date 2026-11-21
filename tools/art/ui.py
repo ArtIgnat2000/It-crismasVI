@@ -118,22 +118,28 @@ def hud():
 
 def hints():
     """Подсказки по управлению: своя на каждый акт (в актах разное управление!)."""
-    W, H = 1150, 116
-    lines = [
-        ('hint1', 'ПРОБЕЛ — ПРЫЖОК      СОБЕРИ 5 ЗВЁЗД'),
-        ('hint2', '↑  ↓ — ВВЕРХ / ВНИЗ      ЕЩЁ 5 ЗВЁЗД'),
-        ('hint3', '←  → БЕГ   ·   ПРОБЕЛ ПРЫЖОК   ·   ПРОДЕРЖИСЬ 20 C'),
+    W, H = 1400, 124
+    lines_txt = [
+        ('hint1', 'ПРОБЕЛ ПРЫЖОК  ·  СОБЕРИ 5 ЗВЕЗД'),
+        ('hint2', '↑ ↓ ВВЕРХ / ВНИЗ  ·  ЕЩЁ 5 ЗВЕЗД'),
+        ('hint3', '← → БЕГ  ·  ПРОБЕЛ ПРЫЖОК  ·  ПРОДЕРЖИСЬ 20 С'),
     ]
-    for fn, text in lines:
+    probe = ImageDraw.Draw(Image.new('RGBA', (10, 10)))
+    for fn, text in lines_txt:
+        size = 58
+        while size > 20:
+            if probe.textbbox((0, 0), text, font=font(size), stroke_width=4)[2] <= W - 90:
+                break
+            size -= 2
         im = Image.new('RGBA', (W, H), (0, 0, 0, 0))
         d = ImageDraw.Draw(im)
-        d.rounded_rectangle([2, 2, W - 2, H - 2], radius=34, fill=(8, 16, 34, 205),
+        d.rounded_rectangle([2, 2, W - 2, H - 2], radius=34, fill=(8, 16, 34, 208),
                             outline=(255, 201, 107, 255), width=4)
-        f = font(46)
-        d.text((W / 2, H / 2 - 3), text, font=f, fill=CREAM, anchor='mm',
+        d.text((W / 2, H / 2 - 2), text, font=font(size), fill=CREAM, anchor='mm',
                stroke_width=4, stroke_fill=(6, 10, 24, 255))
         im.save(f'{UI}/{fn}.png')
-        print('hint', fn, im.size)
+        print('hint', fn, im.size, 'шрифт', size)
+
 
 
 def clock():

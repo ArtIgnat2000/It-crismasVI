@@ -557,7 +557,7 @@ ek.script(when_bcast('Проигрыш'),
 hint = Target('Подсказка')
 for n in (1, 2, 3):
     hint.costume(f'акт{n}', f'{U}/hint{n}.png')
-hint.size = 36
+hint.size = 31
 hint.x, hint.y = 0, -134
 hint.visible = False
 hint.script(when_flag(), hide())
@@ -565,7 +565,7 @@ hint.script(when_bcast('Сброс'), hide())
 # своя подсказка на каждый акт: управление в актах разное
 for n in (1, 2, 3):
     hint.script(when_bcast(f'Акт{n}'),
-                to_front(), goto(0, -134), set_size(36), costume(f'акт{n}'),
+                to_front(), goto(0, -134), set_size(31), costume(f'акт{n}'),
                 set_effect('GHOST', 100), show(),
                 repeat(8, change_effect('GHOST', -12.5), wait(0.03)),
                 wait(4.5),
