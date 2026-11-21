@@ -64,14 +64,17 @@ def heart(d, cx, cy, s, fill):
 
 # ------------------------------------------------------------------ титры/кнопки
 def titles():
+    # ВАЖНО: строки не должны наезжать друг на друга — подпись идёт с чистым зазором
     t = text_img('ПОСЛЕДНЯЯ', 96)
     t2 = text_img('ПОСЫЛКА', 108)
     sub = text_img('новогодняя игра · Scratch 3.0', 34, color=CREAM, stroke=4)
+    gap = 14
     w = max(t.width, t2.width, sub.width) + 40
-    im = Image.new('RGBA', (w, t.height + t2.height + sub.height + 30), (0, 0, 0, 0))
+    h = t.height + t2.height + sub.height + gap * 2
+    im = Image.new('RGBA', (w, h), (0, 0, 0, 0))
     im.alpha_composite(t, ((w - t.width) // 2, 0))
-    im.alpha_composite(t2, ((w - t2.width) // 2, t.height - 10))
-    im.alpha_composite(sub, ((w - sub.width) // 2, t.height + t2.height - 20))
+    im.alpha_composite(t2, ((w - t2.width) // 2, t.height - 6))
+    im.alpha_composite(sub, ((w - sub.width) // 2, t.height + t2.height - 6 + gap))
     im.save(f'{UI}/title.png')
 
     text_img('С НОВЫМ 2027 ГОДОМ!', 84).save(f'{UI}/win.png')
@@ -116,30 +119,124 @@ def hud():
         im.save(f'{UI}/stars_{n}.png')
 
 
-def hints():
-    """Подсказки по управлению: своя на каждый акт (в актах разное управление!)."""
-    W, H = 1400, 124
-    lines_txt = [
-        ('hint1', 'ПРОБЕЛ ПРЫЖОК  ·  СОБЕРИ 5 ЗВЕЗД'),
-        ('hint2', '↑ ↓ ВВЕРХ / ВНИЗ  ·  ЕЩЁ 5 ЗВЕЗД'),
-        ('hint3', '← → БЕГ  ·  ПРОБЕЛ ПРЫЖОК  ·  ПРОДЕРЖИСЬ 20 С'),
-    ]
-    probe = ImageDraw.Draw(Image.new('RGBA', (10, 10)))
-    for fn, text in lines_txt:
-        size = 58
-        while size > 20:
-            if probe.textbbox((0, 0), text, font=font(size), stroke_width=4)[2] <= W - 90:
-                break
-            size -= 2
-        im = Image.new('RGBA', (W, H), (0, 0, 0, 0))
-        d = ImageDraw.Draw(im)
-        d.rounded_rectangle([2, 2, W - 2, H - 2], radius=34, fill=(8, 16, 34, 208),
-                            outline=(255, 201, 107, 255), width=4)
-        d.text((W / 2, H / 2 - 2), text, font=font(size), fill=CREAM, anchor='mm',
-               stroke_width=4, stroke_fill=(6, 10, 24, 255))
-        im.save(f'{UI}/{fn}.png')
-        print('hint', fn, im.size, 'шрифт', size)
+# --------------------------------------------------- нижняя плашка (субтитры/подсказки)
+# Одна геометрия на все тексты снизу: 960x76 px = 480x38 единиц сцены (2x рендер).
+# Благодаря этому субтитр и подсказка физически не могут наехать друг на друга —
+# это один и тот же спрайт «Плашка» в одной и той же точке.
+CAP_W, CAP_H = 960, 84
 
+LINES = {
+    1: ('ДЕД МОРОЗ', 'До Нового года две минуты!'),
+    2: ('ДЕД МОРОЗ', 'Мила, посылка №2027 не доставлена!'),
+    3: ('МИЛА', 'Я успею!'),
+    4: ('СНЕЖА', 'Полозья смазаны, шеф! Держись!'),
+    5: ('МИЛА', 'Ещё одна звезда!'),
+    6: ('МЕТЕЛЬ', 'Тебе не долететь, козочка!'),
+    7: ('МИЛА', 'Смотрите, окно! Там ждут чудо!'),
+    8: ('ДЕД МОРОЗ', 'Ты успела, Мила! С Новым 2027 годом!'),
+    9: ('МИЛА', 'Полночь… Я не успела. Но я попробую снова!'),
+    10: ('ДЕД МОРОЗ', 'Спасибо тебе, козочка. Праздник спасён!'),
+}
+
+HINT_LINES = {
+    1: 'ПРОБЕЛ — ПРЫЖОК   ·   СОБЕРИ 5 ЗВЕЗД',
+    2: '↑ ↓ — ВВЕРХ / ВНИЗ   ·   ЕЩЁ 5 ЗВЕЗД',
+    3: '← → — БЕГ   ·   ПРОБЕЛ — ПРЫЖОК   ·   20 СЕКУНД',
+}
+
+
+def fit_size(text, speaker=None):
+    """Подбираем ОДИН размер шрифта на все плашки, чтобы типографика была единой."""
+    probe = ImageDraw.Draw(Image.new('RGBA', (10, 10)))
+    gap = 26 if speaker else 0
+    size = 42
+    while size > 18:
+        f = font(size)
+        fs = font(int(size * 0.8))
+        wtxt = probe.textbbox((0, 0), text, font=f, stroke_width=3)[2]
+        wspk = probe.textbbox((0, 0), speaker, font=fs, stroke_width=3)[2] if speaker else 0
+        if wspk + gap + wtxt <= CAP_W - 64:
+            return size
+        size -= 2
+    return 18
+
+
+def cap_plate(text, speaker=None, color=CREAM, size=None):
+    """Тёмная плашка во всю ширину сцены: [золотое имя говорящего] + реплика."""
+    im = Image.new('RGBA', (CAP_W, CAP_H), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    d.rounded_rectangle([1, 1, CAP_W - 2, CAP_H - 2], radius=20, fill=(8, 16, 34, 214),
+                        outline=(255, 201, 107, 255), width=3)
+    probe = ImageDraw.Draw(Image.new('RGBA', (10, 10)))
+    gap = 26 if speaker else 0
+    if size is None:
+        size = fit_size(text, speaker)
+    f = font(size)
+    fs = font(int(size * 0.8))
+    wtxt = probe.textbbox((0, 0), text, font=f, stroke_width=3)[2]
+    wspk = probe.textbbox((0, 0), speaker, font=fs, stroke_width=3)[2] if speaker else 0
+    total = wspk + gap + wtxt
+    x = (CAP_W - total) / 2
+    y = CAP_H / 2 + 2
+    if speaker:
+        d.text((x, y - 1), speaker, font=fs, fill=GOLD, anchor='lm',
+               stroke_width=3, stroke_fill=(6, 10, 24, 255))
+        x += wspk + gap
+    d.text((x, y), text, font=f, fill=color, anchor='lm',
+           stroke_width=3, stroke_fill=(6, 10, 24, 255))
+    return im
+
+
+def captions():
+    """Реплики — статичными субтитрами (озвучка уже есть, облачка перекрывали сцену)."""
+    # единый кегль внутри «семейства»: реплики — один, подсказки — другой
+    size_c = min(fit_size(t, spk) for spk, t in LINES.values())
+    size_h = min(fit_size(t) for t in HINT_LINES.values())
+    print('субтитры: кегль', size_c, '· подсказки: кегль', size_h)
+    for n, (spk, txt) in LINES.items():
+        cap_plate(txt, spk, size=size_c).save(f'{UI}/cap{n}.png')
+    for n, txt in HINT_LINES.items():
+        cap_plate(txt, size=size_h).save(f'{UI}/hint{n}.png')
+
+
+def hints():
+    """Совместимость: старые подсказки теперь рисуются общей плашкой."""
+    captions()
+
+
+def particles():
+    """Снежинка и искра: без них частицы брали картинку HUD «★ 0»."""
+    S = 96
+    c = S / 2
+    im = Image.new('RGBA', (S, S), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    for r in range(int(c) - 4, 0, -1):
+        a = int(46 * (1 - r / (c - 4)) ** 1.7)
+        d.ellipse([c - r, c - r, c + r, c + r], fill=(226, 240, 255, a))
+    for i in range(6):
+        a = math.radians(i * 60)
+        dx, dy = math.sin(a), -math.cos(a)
+        d.line([c, c, c + dx * (c - 8), c + dy * (c - 8)], fill=(255, 255, 255, 245), width=5)
+        for t0 in (0.48, 0.72):
+            bx, by = c + dx * (c - 8) * t0, c + dy * (c - 8) * t0
+            for sgn in (-1, 1):
+                a2 = math.radians(i * 60 + sgn * 52)
+                d.line([bx, by, bx + math.sin(a2) * 12, by - math.cos(a2) * 12],
+                       fill=(238, 248, 255, 232), width=4)
+    im.save(f'{UI}/snowflake.png')
+
+    im = Image.new('RGBA', (S, S), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    for r in range(int(c) - 4, 0, -1):
+        a = int(70 * (1 - r / (c - 4)) ** 1.8)
+        d.ellipse([c - r, c - r, c + r, c + r], fill=(255, 214, 140, a))
+    pts = []
+    for i in range(8):
+        r = (c - 6) if i % 2 == 0 else (c - 6) * 0.26
+        a = math.radians(i * 45 - 90)
+        pts.append((c + r * math.cos(a), c + r * math.sin(a)))
+    d.polygon(pts, fill=(255, 247, 224, 255), outline=(255, 201, 107, 255))
+    im.save(f'{UI}/spark.png')
 
 
 def clock():
@@ -259,6 +356,8 @@ if __name__ == '__main__':
     hud()
     clock()
     hints()
+    captions()
+    particles()
     pixel()
     ph = placeholders()
     print('UI готов. Заглушки:', ', '.join(ph) if ph else 'нет (все спрайты на месте)')

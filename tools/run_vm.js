@@ -77,7 +77,6 @@ let vmRef = null;
 function dimsOfDrawable(id) {
     const d = drawables.get(id);
     if (!d) return { w: 100, h: 100 };
-    if (d.dims) return d.dims;
     let dims = { w: 100, h: 100 };
     if (vmRef) {
         const t = vmRef.runtime.targets.find(x => x.drawableID === id);
@@ -87,7 +86,6 @@ function dimsOfDrawable(id) {
             dims = (cos && byName && byName[cos.name]) || spriteDims[t.getName()] || dims;
         }
     }
-    d.dims = dims;            // запоминаем: костюм у клона обычно не меняется
     return dims;
 }
 function box(id) {
@@ -380,6 +378,23 @@ vm.loadProject(fs.readFileSync(file)).then(() => {
     installTrace();
     if (process.env.VM_TRACE_TOUCH) installTouchTrace();
 
+    // Заглушка рендерера отдаёт не «настоящий» размер скина, поэтому встроенный
+    // кламп в RenderedTarget.setSize (min/max относительно текущего размера)
+    // давал мусорные проценты (снежинка «7%» превращалась в 65%). В реальном
+    // Scratch таких костюмов кламп не касается — фиксируем запрошенный размер.
+    (function neutralizeSizeClamp() {
+        const proto = Object.getPrototypeOf(vm.runtime.targets.find(t => !t.isStage));
+        proto.setSize = function (size) {
+            if (this.isStage) return;
+            this.size = size;
+            if (this.renderer) {
+                const {direction, scale} = this._getRenderedDirectionAndScale();
+                this.renderer.updateDrawableDirectionScale(this.drawableID, direction, scale);
+            }
+            this.runtime.requestTargetsUpdate(this);
+        };
+    })();
+
     if (scenario === 'keystest') {
         vm.greenFlag();
         sec(19);
@@ -388,6 +403,83 @@ vm.loadProject(fs.readFileSync(file)).then(() => {
         press(' ');
         log('getKeyIsDown(space)=' + vm.runtime.ioDevices.keyboard.getKeyIsDown('space'));
         for (let i = 0; i < 12; i++) { sec(1 / 60); log(`  кадр ${i}: y=${hero() && hero().y}`); }
+        process.exit(0);
+    }
+
+    // ---------- 0. кадры сцены: снимки состояния для композиционного аудита
+    if (scenario === 'frames') {
+        const outFile = process.argv[4] || '../dist/frames.json';
+        const shots = [];
+        const shot = (label) => {
+            const list = vm.runtime.targets
+                .filter(t => t.visible && t.drawableID !== undefined)
+                .map((t, i) => {
+                    const cos = (t.sprite.costumes || [])[t.currentCostume || 0] || {};
+                    const fx = t.effects || {};
+                    return {
+                        layer: i, name: t.getName(), x: +t.x.toFixed(2), y: +t.y.toFixed(2),
+                        size: +(t.size || 100).toFixed(2), dir: +t.direction || 90,
+                        rot: t.rotationStyle,
+                        costume: cos.name, md5: cos.assetId || cos.md5,
+                        fmt: cos.dataFormat || 'png',
+                        rcX: cos.rotationCenterX, rcY: cos.rotationCenterY,
+                        res: cos.bitmapResolution || 1,
+                        ghost: +(fx.ghost || 0).toFixed(1), bright: +(fx.brightness || 0).toFixed(1),
+                        say: t._sayText || '',
+                    };
+                });
+            shots.push({ label, t: +(vnow / 1000).toFixed(2), backdrop: backdropName(), targets: list });
+            log(`  кадр «${label}» t=${(vnow / 1000).toFixed(1)}с фон=${backdropName()} видимых ${list.length}`);
+        };
+        const waitAct = (n, max = 80) => {
+            for (let i = 0; i < max * 60 && Number(vars()['акт']) !== n; i++) step(1, { bot: true });
+        };
+        const waitVar = (name, value, max = 40) => {
+            for (let i = 0; i < max * 60 && Number(vars()[name]) !== value; i++) step(1, { bot: true });
+        };
+        vm.greenFlag();
+        sec(2.2);
+        shot('01_prolog_title');            // титр + голос за кадром
+        sec(5.5);
+        shot('02_prolog_dialog');           // Дед Мороз и Мила на сцене
+        sec(3.2);
+        shot('03_prolog_dialog_mila');
+        waitAct(1);
+        sec(2.4);
+        shot('04_act1_start');              // подсказка акта 1
+        setVar('жизни', 20);
+        sec(2.0);
+        shot('05_act1_play');
+        setVar('звёзды', 5);
+        waitAct(2);
+        sec(2.2);
+        shot('06_act2_start');
+        setVar('жизни', 20);
+        sec(1.6);
+        shot('07_act2_play');
+        setVar('звёзды', 10);
+        waitAct(3);
+        sec(3.0);                             // Реп6 (метель) + подсказка акта 3
+        shot('08_act3_start');
+        sec(3.0);
+        shot('09_act3_play');
+        setVar('жизни', 20);
+        setVar('осталось', 1);
+        waitVar('победа', 1);
+        sec(3.0);
+        shot('10_win');
+        sec(4.2);                             // Реп8: Дед Мороз + субтитр + кнопка
+        shot('10b_win_finale');
+        // проигрыш — со второго запуска
+        vm.greenFlag();
+        waitAct(1);
+        sec(1.0);
+        setVar('жизни', 0);
+        for (let i = 0; i < 20 * 60 && backdropName() !== 'проигрыш'; i++) step(1, { bot: true });
+        sec(2.6);
+        shot('11_lose');
+        fs.writeFileSync(outFile, JSON.stringify({ file, shots }, null, 1));
+        log('  кадры записаны: ' + outFile);
         process.exit(0);
     }
 
