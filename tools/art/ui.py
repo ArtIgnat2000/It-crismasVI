@@ -116,6 +116,26 @@ def hud():
         im.save(f'{UI}/stars_{n}.png')
 
 
+def hints():
+    """Подсказки по управлению: своя на каждый акт (в актах разное управление!)."""
+    W, H = 1150, 116
+    lines = [
+        ('hint1', 'ПРОБЕЛ — ПРЫЖОК      СОБЕРИ 5 ЗВЁЗД'),
+        ('hint2', '↑  ↓ — ВВЕРХ / ВНИЗ      ЕЩЁ 5 ЗВЁЗД'),
+        ('hint3', '←  → БЕГ   ·   ПРОБЕЛ ПРЫЖОК   ·   ПРОДЕРЖИСЬ 20 C'),
+    ]
+    for fn, text in lines:
+        im = Image.new('RGBA', (W, H), (0, 0, 0, 0))
+        d = ImageDraw.Draw(im)
+        d.rounded_rectangle([2, 2, W - 2, H - 2], radius=34, fill=(8, 16, 34, 205),
+                            outline=(255, 201, 107, 255), width=4)
+        f = font(46)
+        d.text((W / 2, H / 2 - 3), text, font=f, fill=CREAM, anchor='mm',
+               stroke_width=4, stroke_fill=(6, 10, 24, 255))
+        im.save(f'{UI}/{fn}.png')
+        print('hint', fn, im.size)
+
+
 def clock():
     S = 260
     im = Image.new('RGBA', (S, S), (0, 0, 0, 0))
@@ -232,6 +252,7 @@ if __name__ == '__main__':
     buttons()
     hud()
     clock()
+    hints()
     pixel()
     ph = placeholders()
     print('UI готов. Заглушки:', ', '.join(ph) if ph else 'нет (все спрайты на месте)')

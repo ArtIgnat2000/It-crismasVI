@@ -555,14 +555,22 @@ ek.script(when_bcast('Проигрыш'),
          repeat(10, change_effect('GHOST', -10), wait(0.03)))
 
 hint = Target('Подсказка')
-hint.costume('подсказка', f'{U}/hint.png')
-hint.size = 16
-hint.x, hint.y = 0, -150
+for n in (1, 2, 3):
+    hint.costume(f'акт{n}', f'{U}/hint{n}.png')
+hint.size = 36
+hint.x, hint.y = 0, -134
 hint.visible = False
 hint.script(when_flag(), hide())
 hint.script(when_bcast('Сброс'), hide())
-hint.script(when_bcast('Реп4'), show(), goto(0, -150), set_size(16), set_effect('GHOST', 0),
-            wait(6), repeat(10, change_effect('GHOST', 10), wait(0.05)), hide())
+# своя подсказка на каждый акт: управление в актах разное
+for n in (1, 2, 3):
+    hint.script(when_bcast(f'Акт{n}'),
+                to_front(), goto(0, -134), set_size(36), costume(f'акт{n}'),
+                set_effect('GHOST', 100), show(),
+                repeat(8, change_effect('GHOST', -12.5), wait(0.03)),
+                wait(4.5),
+                repeat(8, change_effect('GHOST', 12.5), wait(0.03)),
+                hide())
 
 # ===================================================================  2027
 y27 = Target('2027')
