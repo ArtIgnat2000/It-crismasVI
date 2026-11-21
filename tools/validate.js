@@ -10,7 +10,9 @@ parser(buf, false, (err, res) => {
         console.error('INVALID:', JSON.stringify(err).slice(0, 4000));
         process.exit(1);
     }
-    const targets = res.targets || res;
+    // scratch-parser отдаёт массив [project, ...] — раньше здесь считался сам массив
+    const project = Array.isArray(res) ? res[0] : res;
+    const targets = (project && project.targets) || [];
     let costumes = 0, sounds = 0, blocks = 0;
     for (const t of targets) {
         costumes += (t.costumes || []).length;

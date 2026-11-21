@@ -130,7 +130,7 @@ class Project:
             'targets': out_targets,
             'monitors': [],
             'extensions': [],
-            'meta': {'semver': '3.0.0', 'vm': '0.2.0', 'agent': 'it-christmas-vi/1.2'},
+            'meta': {'semver': '3.0.0', 'vm': '0.2.0', 'agent': 'it-christmas-vi/1.3'},
         }
         return project, bcast_ids
 
@@ -264,7 +264,10 @@ class _Ser:
                     node['inputs'][key] = [3, [12, val[1], self.var_ids[val[1]]], [4, '0']]
                     continue
                 if val[0] == 'bcast':
-                    node['inputs'][key] = [1, [11, self.bcast_ids[val[1]], val[1]]]
+                    # ВАЖНО: порядок примитива рассылки в sb3 — [11, ИМЯ, id].
+                    # Если перепутать, VM ищет рассылку по имени-как-id, не находит
+                    # и молча ничего не запускает (игра «не стартует»).
+                    node['inputs'][key] = [1, [11, val[1], self.bcast_ids[val[1]]]]
                     continue
                 if val[0] == 'menu':
                     mop, mfield = MENU[(b.opcode, key)]
@@ -310,13 +313,16 @@ class _Ser:
         md5 = md5_file(path)
         ext = os.path.splitext(path)[1][1:].lower()
         self.assets[f'{md5}.{ext}'] = path
+        # width/height и точка вращения обязательны в sb3: без них Scratch
+        # ставит центр в (0,0) и спрайт «съезжает» и вращается вокруг угла
+        from PIL import Image
+        with Image.open(path) as im:
+            w, h = im.size
         if center is None:
-            from PIL import Image
-            with Image.open(path) as im:
-                w, h = im.size
             center = (w / 2, h / 2)
         return {'name': name, 'bitmapResolution': res, 'md5ext': f'{md5}.{ext}',
                 'assetId': md5, 'dataFormat': ext,
+                'width': w, 'height': h,
                 'rotationCenterX': center[0], 'rotationCenterY': center[1]}
 
     def sound_json(self, spec):
@@ -382,6 +388,6 @@ def serialize_project(project):
         'targets': targets,
         'monitors': [],
         'extensions': [],
-        'meta': {'semver': '3.0.0', 'vm': '0.2.0', 'agent': 'it-christmas-vi/1.2'},
+        'meta': {'semver': '3.0.0', 'vm': '0.2.0', 'agent': 'it-christmas-vi/1.3'},
     }
     return data, assets
