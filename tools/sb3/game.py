@@ -136,6 +136,7 @@ d.script(
     setv('скорость', 6), setv('ветер', 0.4), setv('осталось', 0),
     setv('музыка', 0), bcast_wait('МузыкаСтоп'),
     bcast_wait('Сброс'),
+    bcast('СнегИдёт'),
     setv('игра', 1),
     wait(0.45),
     backdrop('мастерская'),
@@ -391,8 +392,13 @@ snow = Target('Снег')
 snow.costume('снежинка', f'{U}/stars_0.png')
 snow.size = 4
 snow.visible = False
-snow.script(when_flag(), hide(), repeat(26, clone_self(), wait(0.02)))
+snow.var('клон', 0)
+snow.script(when_flag(), hide())
 snow.script(when_bcast('Сброс'), hide(), delete_clone())
+# клоны помечают себя, чтобы не размножались при повторных рассылках
+snow.script(when_clone(), setv('клон', 1))
+snow.script(when_bcast('СнегИдёт'),
+            if_(eq(var('клон'), 0), repeat(26, clone_self(), wait(0.02))))
 snow.script(when_clone(),
             show(), set_size(rnd(2, 7)), set_effect('GHOST', rnd(20, 70)),
             goto(rnd(-250, 250), rnd(-180, 180)),
