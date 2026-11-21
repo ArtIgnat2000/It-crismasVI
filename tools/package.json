@@ -1,0 +1,20 @@
+{
+  "name": "tools",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@napi-rs/canvas": "^1.2.0",
+    "jsdom": "^31.0.1",
+    "scratch-parser": "^6.0.1",
+    "scratch-storage": "^3.0.39",
+    "scratch-svg-renderer": "^2.5.46",
+    "scratch-vm": "^5.0.300"
+  }
+}
