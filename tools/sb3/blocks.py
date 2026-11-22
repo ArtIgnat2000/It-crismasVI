@@ -339,9 +339,11 @@ class _Ser:
 
     def build(self, layer_order):
         blocks_first = {}
-        self.scripts_json = []
+        self.scripts_json = {}
         for seq in self.t.scripts:
-            self.emit_chain(seq, parent=None, top=True)
+            first = self.emit_chain(seq, parent=None, top=True)
+            if first is not None:
+                self.scripts_json[first] = self.blocks[first]
         out = {
             'isStage': self.t.is_stage,
             'name': self.t.name,
@@ -349,6 +351,7 @@ class _Ser:
             'lists': {self.list_ids[k]: [k, []] for k in self.t.lists},
             'broadcasts': {},
             'blocks': self.blocks,
+            'scripts': self.scripts_json,
             'comments': {},
             'currentCostume': 0,
             'costumes': [self.costume_json(c) for c in self.t.costumes],

@@ -586,12 +586,12 @@ dm.script(when_bcast('Акт3'), hide(), setv('на_сцене', 0))
 dm.script(when_bcast('Проигрыш'), hide(), setv('на_сцене', 0))
 # мигание + «дыхание» (едва заметная качка) — только когда на сцене
 dm.script(when_flag(), forever(
-        wait(0.4),
+        wait(0.35),
         if_(eq(var('на_сцене'), 1),
-            set_y(add(var('осн_y'), mul(2, mathop('sin', mul(timer(), 2)))))),
-        wait(2.6),
+            set_y(add(var('осн_y'), mul(5, mathop('sin', mul(timer(), 2)))))),
+        wait(1.7),
         if_(eq(var('на_сцене'), 1), costume('мороз_бlink')),
-        wait(0.12),
+        wait(0.3),
         if_(eq(var('на_сцене'), 1), costume('дедмороз'))))
 
 # =================================================================  СНЕГОВИК
@@ -616,12 +616,12 @@ sm.script(when_bcast('Реп4'),
 sm.script(when_bcast('Акт1'), hide(), setv('на_сцене', 0))
 # мигание + «дыхание» — только когда на сцене
 sm.script(when_flag(), forever(
-        wait(0.4),
+        wait(0.35),
         if_(eq(var('на_сцене'), 1),
-            set_y(add(var('осн_y'), mul(1.5, mathop('sin', mul(timer(), 2)))))),
-        wait(2.8),
+            set_y(add(var('осн_y'), mul(4, mathop('sin', mul(timer(), 2)))))),
+        wait(1.7),
         if_(eq(var('на_сцене'), 1), costume('снег_бlink')),
-        wait(0.12),
+        wait(0.3),
         if_(eq(var('на_сцене'), 1), costume('снеговик'))))
 
 # ====================================================================  СОВА
@@ -1018,6 +1018,6 @@ for idx, name in [(1, 'мастерская'), (2, 'город'), (3, 'лес'),
 def build_project():
     p = Project()
     for t in [stage, d, mz, snow, tr, dr, sn, st, sl, h, g, ov, sm, dm, mt,
-              cf, ch, lv, sc, cd, ek, sub, cap, y27, fw, fd, btn, bs]:
+              cf, cm, ch, lv, sc, cd, ek, sub, cap, y27, fw, fd, btn, bs]:
         p.add(t)
     return p
