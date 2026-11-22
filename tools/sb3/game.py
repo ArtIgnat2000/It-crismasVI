@@ -191,6 +191,10 @@ d.script(when_bcast('Акт3'),
 h = Target('Мила')
 for n in ('idle', 'run', 'jump', 'cheer'):
     h.costume(n, f'{S}/goat_{n}.png')
+# кадры мигания (закрытые глаза) и дополнительный кадр бега (шаг ног)
+for n in ('idle', 'run', 'jump', 'cheer'):
+    h.costume(f'{n}_blink', f'{S}/goat_{n}_blink.png')
+h.costume('run_b', f'{S}/goat_run_b.png')
 h.sound('голос_3', f'{V}/03_goat_1.mp3')
 h.sound('голос_5', f'{V}/05_goat_2.mp3')
 h.sound('голос_7', f'{V}/07_goat_3.mp3')
@@ -203,36 +207,66 @@ h.size = HERO_SIZE
 h.rotation_style = 'left-right'
 h.var('vy', 0)
 h.var('на_земле', 1)
+h.var('поза', 'idle')   # текущая поза (idle/run/jump/cheer) — для мигания
+h.var('шаг', 0)         # счётчик кадров бега
+h.var('миг', 0)         # флаг мигания (защита от конфликта с чередованием кадров)
 
 h.script(when_flag(),
          hide(), set_size(HERO_SIZE), rotation_style('left-right'), point_dir(90),
-         clear_fx(), setv('vy', 0), setv('на_земле', 1))
+         clear_fx(), setv('vy', 0), setv('на_земле', 1), setv('поза', 'idle'),
+         setv('шаг', 0), setv('миг', 0))
 
 h.script(when_bcast('Сброс'),
          hide(), clear_fx(), set_size(HERO_SIZE), set_effect('GHOST', 0),
-         setv('vy', 0), setv('на_земле', 1), goto(-150, GROUND), point_dir(90))
+         setv('vy', 0), setv('на_земле', 1), setv('поза', 'idle'),
+         setv('шаг', 0), setv('миг', 0), goto(-150, GROUND), point_dir(90))
 
 h.script(when_bcast('Стоп'), hide(), set_effect('GHOST', 0))
+
+# --- мигание: раз в ~3.4 с на 0.12 с переключаем костюм на «закрытые глаза»
+#    текущей позы, затем возвращаем. Поза хранится в «поза»; флаг «миг»
+#    запрещает чередованию кадров бега менять костюм во время мигания.
+h.script(when_flag(), forever(
+        wait(3.4),
+        setv('миг', 1),
+        if_(eq(var('поза'), 'idle'), costume('idle_blink')),
+        if_(eq(var('поза'), 'run'), costume('run_blink')),
+        if_(eq(var('поза'), 'jump'), costume('jump_blink')),
+        if_(eq(var('поза'), 'cheer'), costume('cheer_blink')),
+        wait(0.12),
+        if_(eq(var('поза'), 'idle'), costume('idle')),
+        if_(eq(var('поза'), 'run'), costume('run')),
+        if_(eq(var('поза'), 'jump'), costume('jump')),
+        if_(eq(var('поза'), 'cheer'), costume('cheer')),
+        setv('миг', 0),
+        wait(0.2)))
 
 # --- Акт 1: бег с прыжками
 h.script(when_bcast('Акт1'),
          show(), set_size(HERO_SIZE), goto(-150, GROUND), point_dir(90),
-         costume('run'), setv('vy', 0), setv('на_земле', 1), set_effect('GHOST', 0),
+         costume('run'), setv('поза', 'run'), setv('шаг', 0),
+         setv('vy', 0), setv('на_земле', 1), set_effect('GHOST', 0),
          until(not_act(1),
                if_(and_(key('space'), eq(var('на_земле'), 1)),
-                   setv('vy', 15), setv('на_земле', 0), play('прыжок'), costume('jump')),
+                   setv('vy', 15), setv('на_земле', 0), play('прыжок'),
+                   costume('jump'), setv('поза', 'jump')),
                change_y(var('vy')),
                changev('vy', -1.3),
                if_(lt(y_pos(), GROUND),
                    set_y(GROUND), setv('vy', 0),
                    if_(eq(var('на_земле'), 0), play('приземление')),
-                   setv('на_земле', 1), costume('run')),
+                   setv('на_земле', 1), costume('run'), setv('поза', 'run')),
+               # анимация бега: чередование кадров шага (ноги кажутся движущимися)
+               if_(and_(and_(eq(var('на_земле'), 1), eq(var('поза'), 'run')),
+                        eq(var('миг'), 0)),
+                   changev('шаг', 1),
+                   if_(eq(mod(var('шаг'), 7), 0), costume('run_b'), costume('run'))),
                wait(0))
                )
 # --- Акт 2: полёт на санях, управление вверх/вниз
 h.script(when_bcast('Акт2'),
          show(), set_size(HERO_SIZE), goto(-130, -60), point_dir(90),
-         costume('run'), set_effect('GHOST', 0),
+         costume('run'), setv('поза', 'run'), set_effect('GHOST', 0),
          until(not_act(2),
                if_(key('up arrow'), change_y(3.4)),
                if_(key('down arrow'), change_y(-3.4)),
@@ -243,20 +277,26 @@ h.script(when_bcast('Акт2'),
 # --- Акт 3: крыша, бег влево-вправо + прыжок
 h.script(when_bcast('Акт3'),
          show(), set_size(HERO_SIZE), goto(-150, GROUND), point_dir(90),
-         costume('run'), setv('vy', 0), setv('на_земле', 1), set_effect('GHOST', 0),
+         costume('run'), setv('поза', 'run'), setv('шаг', 0),
+         setv('vy', 0), setv('на_земле', 1), set_effect('GHOST', 0),
          until(not_act(3),
                if_(key('left arrow'), change_x(-4), point_dir(-90)),
                if_(key('right arrow'), change_x(4), point_dir(90)),
                if_(gt(x_pos(), 210), set_x(210)),
                if_(lt(x_pos(), -210), set_x(-210)),
                if_(and_(key('space'), eq(var('на_земле'), 1)),
-                   setv('vy', 15), setv('на_земле', 0), play('прыжок'), costume('jump')),
+                   setv('vy', 15), setv('на_земле', 0), play('прыжок'),
+                   costume('jump'), setv('поза', 'jump')),
                change_y(var('vy')),
                changev('vy', -1.3),
                if_(lt(y_pos(), GROUND),
                    set_y(GROUND), setv('vy', 0),
                    if_(eq(var('на_земле'), 0), play('приземление')),
-                   setv('на_земле', 1), costume('run')),
+                   setv('на_земле', 1), costume('run'), setv('поза', 'run')),
+               if_(and_(and_(eq(var('на_земле'), 1), eq(var('поза'), 'run')),
+                        eq(var('миг'), 0)),
+                   changev('шаг', 1),
+                   if_(eq(mod(var('шаг'), 7), 0), costume('run_b'), costume('run'))),
                wait(0)))
 
 # --- удар: неуязвимость и мерцание (не даёт потерять 3 жизни за секунду)
@@ -267,16 +307,17 @@ h.script(when_bcast('Хит'),
              repeat(14, set_effect('GHOST', 60), wait(0.09), set_effect('GHOST', 0), wait(0.09)),
              setv('неуязвим', 0)))
 
-h.script(when_bcast('Победа'), show(), clear_fx(), goto(118, -72), set_size(30), costume('cheer'),
+h.script(when_bcast('Победа'), show(), clear_fx(), goto(118, -72), set_size(30),
+         costume('cheer'), setv('поза', 'cheer'),
          repeat(6, change_y(12), wait(0.09), change_y(-12), wait(0.09)))
 
 h.script(when_bcast('Проигрыш'), show(), clear_fx(), goto(-140, -80), set_size(HERO_SIZE),
-         costume('idle'), point_dir(90), set_effect('GHOST', 25))
+         costume('idle'), setv('поза', 'idle'), point_dir(90), set_effect('GHOST', 25))
 
 # --- реплики: текст показывает спрайт «Плашка» (субтитры внизу),
 #     здесь — только озвучка и мизансцена. Никаких облачков над сценой.
 h.script(when_bcast('Реп2'), show(), goto(95, -78), set_size(HERO_SIZE),
-         costume('idle'), point_dir(90), clear_fx())
+         costume('idle'), setv('поза', 'idle'), point_dir(90), clear_fx())
 h.script(when_bcast('Реп3'), play('голос_3'))
 h.script(when_bcast('Реп5'), play('голос_5'))
 h.script(when_bcast('Реп7'), play('голос_7'))
@@ -296,14 +337,22 @@ sl.script(when_bcast('Стоп'), hide())
 # в воздухе над Миной: offset по y был -14 вместо -43). В акте 2 — полёт на
 # санях через лес: платформа саней точно под ногами Милы.
 sl.script(when_bcast('Акт1'),
-         show(), set_size(15), to_back(),
+         show(), set_size(15), to_back(), reset_timer(),
          until(not_act(1),
-               goto(add(of_prop('Мила', 'x position'), -60), add(of_prop('Мила', 'y position'), -38.4)),
+               # лёгкая тряска беготни: вертикальный кач + слегка кренится
+               goto(add(of_prop('Мила', 'x position'), -60),
+                    add(add(of_prop('Мила', 'y position'), -38.4),
+                        mul(2.5, mathop('sin', mul(timer(), 10))))),
+               point_dir(add(90, mul(3, mathop('sin', mul(timer(), 10))))),
                wait(0)))
 sl.script(when_bcast('Акт2'),
-         show(), set_size(30), to_back(),
+         show(), set_size(30), to_back(), reset_timer(),
          until(not_act(2),
-               goto(add(of_prop('Мила', 'x position'), -6), add(of_prop('Мила', 'y position'), -51)),
+               # полёт: плавный кач и ленивый крен саней в воздухе
+               goto(add(of_prop('Мила', 'x position'), -6),
+                    add(add(of_prop('Мила', 'y position'), -51),
+                        mul(5, mathop('sin', mul(timer(), 6))))),
+               point_dir(add(90, mul(5, mathop('sin', mul(timer(), 6))))),
                wait(0)))
 sl.script(when_bcast('Акт3'), hide())
 
@@ -508,34 +557,47 @@ mt.script(when_bcast('Акт3'),
 # ==================================================================  ДЕД МОРОЗ
 dm = Target('ДедМороз')
 dm.costume('дедмороз', f'{S}/santa.png')
+dm.costume('мороз_бlink', f'{S}/santa_blink.png')
 for nm, fn in [('голос_1', '01_narrator'), ('голос_2', '02_santa'),
                ('голос_8', '08_final'), ('голос_10', '10_outro')]:
     dm.sound(nm, f'{V}/{fn}.mp3')
 dm.size = 42
 dm.visible = False
 dm.rotation_style = 'left-right'
-dm.script(when_flag(), hide())
-dm.script(when_bcast('Сброс'), hide())
-dm.script(when_bcast('Стоп'), hide())
+dm.var('на_сцене', 0)   # на сцене? (для мигания/дыхания)
+dm.var('осн_y', -60)    # основание y для «дыхания»
+dm.script(when_flag(), hide(), setv('на_сцене', 0))
+dm.script(when_bcast('Сброс'), hide(), setv('на_сцене', 0))
+dm.script(when_bcast('Стоп'), hide(), setv('на_сцене', 0))
 # Пролог: реплику 1 говорит голос за кадром поверх титра — Дед Мороз ещё не вышел.
 # Выходит на реплике 2 слева и остаётся до акта. В актах 1–2 его на сцене НЕТ
 # (раньше он стоял посреди улицы до самой крыши).
-dm.script(when_bcast('Реп1'), hide(), play('голос_1'))
+dm.script(when_bcast('Реп1'), hide(), setv('на_сцене', 0), play('голос_1'))
 dm.script(when_bcast('Реп2'),
          show(), goto(-120, -60), set_size(34), costume('дедмороз'), point_dir(90),
-         play('голос_2'))
+         setv('на_сцене', 1), setv('осн_y', -60), reset_timer(), play('голос_2'))
 dm.script(when_bcast('Реп8'),
          show(), goto(-140, -75), set_size(28), costume('дедмороз'), point_dir(90),
-         play('голос_8'))
+         setv('на_сцене', 1), setv('осн_y', -75), reset_timer(), play('голос_8'))
 dm.script(when_bcast('Реп10'), play('голос_10'))
-dm.script(when_bcast('Акт1'), hide())
-dm.script(when_bcast('Акт2'), hide())
-dm.script(when_bcast('Акт3'), hide())
-dm.script(when_bcast('Проигрыш'), hide())
+dm.script(when_bcast('Акт1'), hide(), setv('на_сцене', 0))
+dm.script(when_bcast('Акт2'), hide(), setv('на_сцене', 0))
+dm.script(when_bcast('Акт3'), hide(), setv('на_сцене', 0))
+dm.script(when_bcast('Проигрыш'), hide(), setv('на_сцене', 0))
+# мигание + «дыхание» (едва заметная качка) — только когда на сцене
+dm.script(when_flag(), forever(
+        wait(0.4),
+        if_(eq(var('на_сцене'), 1),
+            set_y(add(var('осн_y'), mul(2, mathop('sin', mul(timer(), 2)))))),
+        wait(2.6),
+        if_(eq(var('на_сцене'), 1), costume('мороз_бlink')),
+        wait(0.12),
+        if_(eq(var('на_сцене'), 1), costume('дедмороз'))))
 
 # =================================================================  СНЕГОВИК
 sm = Target('Снеговик')
 sm.costume('снеговик', f'{S}/snowman.png')
+sm.costume('снег_бlink', f'{S}/snowman_blink.png')
 sm.sound('голос_4', f'{V}/04_snowman.mp3')
 sm.sound('скрип', f'{F}/sfx_step.mp3')
 sm.size = 20
@@ -543,17 +605,29 @@ sm.visible = False
 # без этого «повернуть в направление -90» крутило снеговика на 180° —
 # в прологе он стоял вверх ногами (стиль «влево-вправо» только отражает спрайт)
 sm.rotation_style = 'left-right'
-sm.script(when_flag(), hide())
-sm.script(when_bcast('Сброс'), hide())
-sm.script(when_bcast('Стоп'), hide())
+sm.var('на_сцене', 0)
+sm.var('осн_y', -88)
+sm.script(when_flag(), hide(), setv('на_сцене', 0))
+sm.script(when_bcast('Сброс'), hide(), setv('на_сцене', 0))
+sm.script(when_bcast('Стоп'), hide(), setv('на_сцене', 0))
 sm.script(when_bcast('Реп4'),
          show(), goto(185, -88), set_size(18), point_dir(-90),
-         play('голос_4'))
-sm.script(when_bcast('Акт1'), hide())
+         setv('на_сцене', 1), setv('осн_y', -88), reset_timer(), play('голос_4'))
+sm.script(when_bcast('Акт1'), hide(), setv('на_сцене', 0))
+# мигание + «дыхание» — только когда на сцене
+sm.script(when_flag(), forever(
+        wait(0.4),
+        if_(eq(var('на_сцене'), 1),
+            set_y(add(var('осн_y'), mul(1.5, mathop('sin', mul(timer(), 2)))))),
+        wait(2.8),
+        if_(eq(var('на_сцене'), 1), costume('снег_бlink')),
+        wait(0.12),
+        if_(eq(var('на_сцене'), 1), costume('снеговик'))))
 
 # ====================================================================  СОВА
 ov = Target('Сова')
 ov.costume('сова', f'{S}/owl.png')
+ov.costume('взмах', f'{S}/owl_open.png')
 ov.sound('уханье', f'{F}/sfx_owl.mp3')
 ov.size = 12
 ov.visible = False
@@ -561,29 +635,45 @@ ov.script(when_flag(), hide())
 ov.script(when_bcast('Сброс'), hide())
 ov.script(when_bcast('Стоп'), hide())
 ov.script(when_bcast('Акт2'),
-         show(), goto(-185, 70), set_size(12),
+         show(), goto(-185, 70), set_size(12), costume('сова'),
          until(not_act(2),
                set_y(add(70, mul(12, mathop('sin', mul(var('время'), 60))))),
+               # взмахи крыльями: чередование костюмов (крыло поднято/опущено)
+               next_costume(),
                if_(eq(mod(var('время'), 5), 0), play('уханье')),
-               wait(0.2),
+               wait(0.35),
                ))
 
 # ===================================================================  ЧАСЫ
+# Циферблат + две стрелки (минутная и часовая) с центром поворота в основании.
+# Стрелки плавно вращаются по переменной «время» — обратный отсчёт до полуночи:
+# угол = (150 - время) * скорость. При времени 150 стрелки в 12, при 0 — снова
+# в 12 (полный оборот за время актов). Минутная — 2.4°/с, часовая — 0.2°/с.
+CW = (196, 126)  # центр часов на табло
 cf = Target('Часы_циферблат')
 cf.costume('часы', f'{U}/clock_face.png')
 cf.size = 20
-cf.x, cf.y = 196, 126
-cf.script(when_flag(), show(), to_front(), set_size(20), goto(196, 126))
-cf.script(when_bcast('Сброс'), show(), to_front(), set_size(20), goto(196, 126))
+cf.x, cf.y = CW
+cf.script(when_flag(), show(), to_front(), set_size(20), goto(*CW))
+cf.script(when_bcast('Сброс'), show(), to_front(), set_size(20), goto(*CW))
 
-ch = Target('Часы_стрелка')
-# ось вращения — у красного «грузика» (низ картинки), иначе стрелка торчит наружу
-ch.costume('стрелка', f'{U}/clock_hand.png', center=(12, 156))
-ch.size = 16
-ch.x, ch.y = 196, 126
-ch.script(when_flag(), show(), to_front(), set_size(16), goto(196, 126),
-          forever(point_dir(mul(var('время'), 2.4))))
-ch.script(when_bcast('Сброс'), show(), to_front(), set_size(16), goto(196, 126))
+# минутная стрелка: длинная, полный оборот за 150 с (2.4°/с)
+cm = Target('Часы_минутная')
+cm.costume('минутная', f'{U}/clock_hand_min.png', center=(11, 75))
+cm.size = 30
+cm.x, cm.y = CW
+cm.script(when_flag(), show(), to_front(), set_size(30), goto(*CW),
+          forever(point_dir(mul(sub(150, var('время')), 2.4))))
+cm.script(when_bcast('Сброс'), show(), to_front(), set_size(30), goto(*CW))
+
+# часовая стрелка: короткая, 1/12 скорости минутной (0.2°/с)
+ch = Target('Часы_часовая')
+ch.costume('часовая', f'{U}/clock_hand_hr.png', center=(15, 48))
+ch.size = 22
+ch.x, ch.y = CW
+ch.script(when_flag(), show(), to_front(), set_size(22), goto(*CW),
+          forever(point_dir(mul(sub(150, var('время')), 0.2))))
+ch.script(when_bcast('Сброс'), show(), to_front(), set_size(22), goto(*CW))
 
 # ====================================================================  HUD
 lv = Target('Жизни')
@@ -746,6 +836,96 @@ fw.script(when_clone(), setv('клон', 1),
          set_effect('COLOR', rnd(0, 100)), play('салют'), point_dir(rnd(0, 360)),
          repeat(24, move_steps(4), turn_right(15), change_effect('GHOST', 4), change_size(-0.2), wait(0.02)),
          delete_clone())
+
+# ================================================================  ЭФФЕКТЫ ФОНОВ
+# Анимированные эффекты на сцене: дым (мастерская), огоньки (город), оспы (лес),
+# метель (крыша), снег (город/лес), дым и крупные салютные вспышки (победа).
+# Все эффекты — в безопасной зоне верхней части сцены (y 10..100), ниже HUD
+# (y>=112), и убраны на бэкспейд (to_back), чтобы не перекрывать актёров.
+def fx_actor(name, costumes, size, sounds=None):
+    """Актор эффекта: скрыт, сброшен, остановлен; клонирует сам себя."""
+    t = Target(name)
+    for i, c in enumerate(costumes):
+        t.costume(c, f'{S}/{c}.png')
+    t.size = size
+    t.visible = False
+    t.var('клон', 0)
+    t.script(when_flag(), hide(), setv('клон', 0))
+    t.script(when_bcast('Сброс'), delete_clone(), hide(), setv('клон', 0))
+    t.script(when_bcast('Стоп'), delete_clone(), hide())
+    return t
+
+
+# --- Дым в мастерской: пыли дымят вверх и рассеиваются
+smk = fx_actor('Дым', ['fx_smoke_0', 'fx_smoke_1', 'fx_smoke_2'], 12)
+smk.script(when_flag(), show(), to_back(), setv('клон', 0),
+           until(eq(var('акт'), 1), clone_self(), wait(1.3)))
+smk.script(when_bcast('Сброс'), delete_clone(), hide(), setv('клон', 0),
+           show(), to_back(),
+           until(eq(var('акт'), 1), clone_self(), wait(1.3)))
+smk.script(when_clone(), setv('клон', 1), show(), to_back(),
+           goto(rnd(-90, 90), 20), set_size(rnd(10, 16)),
+           set_effect('GHOST', 0),
+           repeat(30, change_y(2.2), change_x(mul(rnd(-1, 1), 0.8)),
+                  change_effect('GHOST', 4), wait(0.06)),
+           delete_clone())
+
+# --- Огни/огоньки в городе: мерцающие точки в небе
+ln = fx_actor('Огни', ['fx_lantern_0', 'fx_lantern_1', 'fx_lantern_2', 'fx_lantern_3'], 10)
+ln.script(when_bcast('Акт1'), show(), to_back(),
+          setv('клон', 0), clone_self(), clone_self(), clone_self())
+ln.script(when_bcast('Акт2'), delete_clone(), hide())
+ln.script(when_clone(), setv('клон', add(var('клон'), 1)), show(), to_back(),
+          if_(eq(var('клон'), 1), goto(-240, 55)),
+          if_(eq(var('клон'), 2), goto(0, 70)),
+          if_(eq(var('клон'), 3), goto(240, 55)),
+          forever(next_costume(), wait(0.16)))
+
+# --- Снег уже есть у актёра «Снег» (26 клонов, падающие хлопья) — не дублируем.
+
+# --- Овы в лесу: мерцающие оспы, блуждающие в воздухе
+ffl = fx_actor('Оспы', ['fx_firefly_0', 'fx_firefly_1', 'fx_firefly_2', 'fx_firefly_3'], 10)
+ffl.script(when_bcast('Акт2'), show(), to_back(),
+           until(not_act(2), clone_self(), wait(0.8)))
+ffl.script(when_clone(), setv('клон', 1), show(), to_back(),
+           goto(rnd(-280, 280), rnd(25, 90)), set_size(rnd(8, 13)),
+           repeat(45, change_x(mul(rnd(-1, 1), 1.6)), change_y(mul(rnd(-1, 1), 1.0)),
+                  next_costume(), change_effect('GHOST', 3), wait(0.08)),
+           delete_clone())
+
+# --- Метель на крыше: хлопья метели, проносящиеся по небу
+blz = fx_actor('Метель_фон', ['fx_blizzard_0', 'fx_blizzard_1', 'fx_blizzard_2', 'fx_blizzard_3'], 16)
+blz.script(when_bcast('Акт3'), show(), to_back(),
+           until(not_act(3), clone_self(), wait(0.7)))
+blz.script(when_clone(), setv('клон', 1), show(), to_back(),
+           goto(-330, rnd(25, 85)), set_size(rnd(14, 20)),
+           until(gt(x_pos(), 340),
+                 change_x(7), next_costume(), wait(0.1),
+                 if_(gt(x_pos(), 340), goto(-330, rnd(25, 85)), wait(0))),
+           delete_clone())
+
+# --- Дым и салют на финальном слайде (победа)
+smk2 = fx_actor('Дым_финал', ['fx_smoke_0', 'fx_smoke_1', 'fx_smoke_2'], 14)
+smk2.script(when_bcast('Победа'), show(), to_back(),
+            until(eq(var('победа'), 0), clone_self(), wait(1.1)))
+smk2.script(when_bcast('Проигрыш'), delete_clone(), hide())
+smk2.script(when_clone(), setv('клон', 1), show(), to_back(),
+            goto(rnd(-160, 160), 10), set_size(rnd(12, 18)),
+            set_effect('GHOST', 0),
+            repeat(34, change_y(2.4), change_x(mul(rnd(-1, 1), 0.9)),
+                   change_effect('GHOST', 3.5), wait(0.06)),
+            delete_clone())
+
+# --- Крупные салютные вспышки на победе (в дополнение к искрам Фейерверка)
+fw2 = fx_actor('Салюты', ['fx_explosion_0', 'fx_explosion_1', 'fx_explosion_2', 'fx_explosion_3'], 14)
+fw2.sound('салют', f'{F}/sfx_firework.mp3')
+fw2.script(when_bcast('Победа'), hide(), wait(0.8),
+           if_(eq(var('клон'), 0), repeat(6, clone_self(), wait(0.5))))
+fw2.script(when_clone(), setv('клон', 1),
+           show(), goto(rnd(-150, 150), rnd(40, 110)), set_size(rnd(12, 18)),
+           set_effect('COLOR', rnd(0, 100)), play('салют'),
+           repeat(20, change_size(1.5), change_effect('GHOST', 5), wait(0.04)),
+           delete_clone())
 
 # ================================================================  ЗАТЕМНЕНИЕ
 fd = Target('Затемнение')

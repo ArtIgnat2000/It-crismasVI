@@ -276,6 +276,254 @@ def clock():
     d.ellipse([2, 140, 22, 180], fill=(192, 57, 43, 255), outline=NAVY, width=3)
     h.save(f'{UI}/clock_hand.png')
 
+    # две стрелки с центром поворота В ЦЕНТРЕ полотна: основание лежит в
+    # центре, стрелка торчит вверх. Часовая — короткая и толстая, минутная —
+    # длинная и тонкая. Угол 0° (направление «вверх») = 12 часов.
+    def hand(w, hh, pivot_y, fill, tip_fill, tip_h, tip_w):
+        im = Image.new('RGBA', (w, hh), (0, 0, 0, 0))
+        dd = ImageDraw.Draw(im)
+        px = w / 2
+        # рукав от центра до основания стрелки
+        dd.rounded_rectangle([px - w * 0.26, pivot_y - hh * 0.5, px + w * 0.26, pivot_y + 4],
+                             radius=int(w * 0.2), fill=fill, outline=NAVY, width=3)
+        # стрелка (основание — в pivot_y, верх — в 0)
+        dd.polygon([(px - w * 0.16, pivot_y + 2), (px + w * 0.16, pivot_y + 2),
+                    (px, tip_h)], fill=fill, outline=NAVY)
+        # наконечник
+        dd.ellipse([px - tip_w, tip_h - tip_h, px + tip_w, tip_h + tip_h * 0.5],
+                   fill=tip_fill, outline=NAVY, width=3)
+        return im, (px, pivot_y)
+
+    min_img, min_pivot = hand(22, 150, 75, (255, 201, 107, 255), (192, 57, 43, 255), 18, 4)
+    min_img.save(f'{UI}/clock_hand_min.png')
+    hr_img, hr_pivot = hand(30, 96, 48, (245, 241, 230, 255), (192, 57, 43, 255), 14, 5)
+    hr_img.save(f'{UI}/clock_hand_hr.png')
+
+
+def mila_run_frame():
+    """Дополнительный кадр бега Милы: спрайт поднят на 7 px — ноги кажутся
+    поднятыми (шаг). Используется как второй кадр анимации бега (смена костюма,
+    а не позиции — коллизии не затронуты)."""
+    src = Image.open(f'{SPR}/goat_run.png').convert('RGBA')
+    W, H = src.size
+    im = Image.new('RGBA', (W, H), (0, 0, 0, 0))
+    im.paste(src, (0, -7), src)  # поднять на 7 px, освободить низ
+    im.save(f'{SPR}/goat_run_b.png')
+
+
+def _blink_frame(src_path, out_path, ylo, yhi, lid_h=10, lid_a=235):
+    """Становящий кадр мигания: в лицевой полосе (y в [ylo,yhi]) находим
+    тёмные кластеры (глаза) и рисуем по каждому тёмную полупрозрачную планку-веко.
+    Покрытие по блоку тёмных пикселей — глаза гарантированно закрываются, даже
+    без точного знания координат."""
+    import numpy as np
+    src = Image.open(src_path).convert('RGBA')
+    a = np.asarray(src)
+    rgb = a[..., :3].astype(int)
+    al = a[..., 3]
+    dark = (rgb.sum(axis=2) < 180) & (al > 150)
+    im = src.copy()
+    d = ImageDraw.Draw(im, 'RGBA')
+    band = dark[ylo:yhi, :]
+    ys, xs = np.nonzero(band)
+    if len(xs) == 0:
+        im.save(out_path)
+        return
+    # кластеризация по x с шагом 12
+    import collections
+    hist = collections.Counter((x // 12) * 12 for x in xs)
+    clusters = sorted([k for k, v in hist.items() if v >= 14], key=lambda k: -hist[k])
+    for k in clusters[:4]:  # до 4 «глаз»/детали
+        sel = (xs >= k) & (xs < k + 12)
+        cx = int(xs[sel].mean())
+        cy = int(ys[sel].mean()) + ylo
+        d.rounded_rectangle([cx - 9, cy - lid_h // 2, cx + 9, cy + lid_h // 2],
+                            radius=lid_h // 2, fill=(20, 14, 12, lid_a))
+    im.save(out_path)
+
+
+def santa_blink():
+    _blink_frame(f'{SPR}/santa.png', f'{SPR}/santa_blink.png', 100, 150)
+
+
+def snowman_blink():
+    _blink_frame(f'{SPR}/snowman.png', f'{SPR}/snowman_blink.png', 80, 120)
+
+
+def mila_blink():
+    for pose in ('idle', 'run', 'jump', 'cheer'):
+        _blink_frame(f'{SPR}/goat_{pose}.png', f'{SPR}/goat_{pose}_blink.png',
+                     115, 160)
+
+
+def effect_wink_closed():
+    """Закрытое веко Милы: полупрозрачная мягкая ломаная на позиции глаза
+    (dark lid over the eye cluster around (215,142) of the goat sprite)."""
+    W, H = 64, 36
+    im = Image.new('RGBA', (W, H), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    for w in (20, 15, 11):
+        d.line([(6, 20 - w // 2), (32, 16 - w // 2), (58, 20 - w // 2)],
+               fill=(35, 22, 20, 235), width=w)
+    return im
+
+
+def owl_flap_frame():
+    """Кадр взмаха крыла Совы: левое крыло (область x<90) поднимается вверх-влево
+    вокруг плеча (88, 62) на 18°. Старое крыло стирается, чтобы не было
+    «двойного крыла»; крыло остаётся в области x<90 — лицо не перекрывается."""
+    base = Image.open(f'{SPR}/owl.png').convert('RGBA')
+    SHOULDER = (88, 62)
+    # 1) стираем старое крыло (x < 90)
+    arr = np.array(base)
+    arr[:, :90, 3] = 0
+    base = Image.fromarray(arr)
+    # 2) копируем только область крыла и вращаем её вокруг плеча
+    wing = Image.open(f'{SPR}/owl.png').convert('RGBA').crop((0, 0, 90, base.height))
+    canvas = Image.new('RGBA', base.size, (0, 0, 0, 0))
+    canvas.paste(wing, (0, 0), wing)
+    rot = canvas.rotate(-18, resample=Image.BICUBIC, center=SHOULDER)
+    base.alpha_composite(rot)
+    base.save(f'{SPR}/owl_open.png')
+
+
+def owl_flap_frames():
+    owl_flap_frame()
+
+
+def effect_owl_wings(open_):
+    """Крыло Совы в взмахе. Открывается вниз-вперёд, близко к телу (x≈62).
+    open_=0 — сложен, open_=1 — раскрыт на 42°."""
+    W, H = 150, 220
+    im = Image.new('RGBA', (W, H), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    col = (64, 44, 38)
+    wing = Image.new('RGBA', (W, H), (0, 0, 0, 0))
+    wd = ImageDraw.Draw(wing)
+    for i in range(7):
+        x0 = 70 - i * 8
+        wd.line([(x0 + i * 2, 30 + i * 16), (18 + i * 2, 120 + i * 10)],
+                fill=col, width=9)
+    wing = wing.rotate(open_ * 42, resample=Image.BICUBIC, center=(70, 34))
+    im = Image.alpha_composite(im, wing)
+    d = ImageDraw.Draw(im)
+    d.ellipse([62, 24, 82, 44], fill=(48, 34, 30, 255))  # плечевая кость
+    return im
+
+
+def effect_smoke_puff(i):
+    """Дым/пар: слой дофельного серого пуффа. i 0..4 — цикл размера."""
+    s = [64, 84, 100, 84, 64][i % 5]
+    im = Image.new('RGBA', (s, s), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    for r, a in ((s * 0.36, 110), (s * 0.30, 90), (s * 0.24, 70)):
+        cx = s / 2 + (6 if r > s * 0.3 else -5)
+        cy = s * 0.46 + (5 if r < s * 0.28 else -4)
+        d.ellipse([cx - r, cy - r * 0.8, cx + r, cy + r * 0.8],
+                  fill=(196, 193, 186, a))
+    return im
+
+
+def effect_flame(i):
+    """Пламя lantern/candle: 4 состояния анимации (48×96)."""
+    W, H = 48, 96
+    im = Image.new('RGBA', (W, H), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    t = i % 4
+    # внутренний ядро
+    for dx, sx, sy in ((0, 1.0, 1.0), (0, 0.62, 0.86), (-6 + t * 3, 0.34, 0.6)):
+        x, y = W / 2 + dx, H * 0.58
+        d.ellipse([x - W * 0.11 * sx, y - H * 0.18 * sy,
+                   x + W * 0.11 * sx, y + H * 0.18 * sy],
+                  fill=(255, 236, 150, 230))
+    # внешний язык
+    pts = [(W / 2, H * 0.16 + (8 if t == 1 else -6 if t == 2 else 2)),
+           (W * 0.16, H * 0.5), (W * 0.42, H * 0.46),
+           (W / 2, H * 0.58), (W * 0.84, H * 0.46),
+           (W * 0.84, H * 0.46)]
+    d.polygon(pts, fill=(255, 138, 40, 200))
+    d.polygon([(W / 2, H * 0.24), (W * 0.26, H * 0.52),
+               (W * 0.5, H * 0.58), (W * 0.74, H * 0.52)],
+              fill=(255, 190, 80, 150))
+    return im
+
+
+def effect_lantern(i):
+    """Тёплое мерцание огонька: 4 кадра мягкого жёлтого света (72×72)."""
+    s, t = 72, i % 4
+    im = Image.new('RGBA', (s, s), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    a = [130, 175, 145, 200][t]
+    r = [40, 36, 42, 33][t]
+    d.ellipse([s / 2 - r, s / 2 - r, s / 2 + r, s / 2 + r],
+              fill=(255, 210, 120, a))
+    d.ellipse([s / 2 - r * 0.55, s / 2 - r * 0.55,
+               s / 2 + r * 0.55, s / 2 + r * 0.55],
+              fill=(255, 244, 200, min(a + 60, 240)))
+    return im
+
+
+def effect_firefly(i):
+    """Светлячок/мерцающая искорка леса: 36×36, 4 кадра пульсации."""
+    s, t = 36, i % 4
+    im = Image.new('RGBA', (s, s), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    r = [11, 8, 12, 6][t]
+    d.ellipse([s / 2 - r * 1.7, s / 2 - r * 1.7,
+               s / 2 + r * 1.7, s / 2 + r * 1.7],
+              fill=(200, 235, 150, 70))
+    d.ellipse([s / 2 - r, s / 2 - r, s / 2 + r, s / 2 + r],
+              fill=(245, 255, 190, 220))
+    return im
+
+
+def effect_snow_streaks(i):
+    """Снежные хлопья/узкие размытые полосы: 144×144, 5 кадров."""
+    s, t = 144, i % 5
+    im = Image.new('RGBA', (s, s), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    rng = [(0, 0), (10, 8), (6, -6), (-8, 10), (14, -4)][t]
+    for x, y, r, a in ((48, 48, 7, 190), (96, 70, 6, 150), (30, 84, 5, 130),
+                       (110, 110, 6, 140), (60, 116, 5, 110), (104, 40, 5, 120)):
+        d.ellipse([x + rng[0] - r, y + rng[1] - r,
+                   x + rng[0] + r, y + rng[1] + r],
+                  fill=(235, 242, 250, a))
+    return im
+
+
+def effect_blizzard(i):
+    """Метель на крыше: горизонтальная пелена порывов (160×110)."""
+    W, H, t = 160, 110, i % 4
+    im = Image.new('RGBA', (W, H), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    for k, (y, a, ph) in enumerate(((28, 170, 0), (50, 140, 1),
+                                     (72, 120, 2), (92, 100, 3))):
+        x0 = (k * 40 + t * 26) % (W + 80) - 40
+        d.line([(x0, y), (x0 + W * 0.62, y + 12)],
+               fill=(242, 248, 252, a), width=14)
+        d.line([(x0 + 30, y - 8), (x0 + 90, y + 6)],
+               fill=(255, 255, 255, a - 30), width=7)
+    return im
+
+
+def effect_explosion(i):
+    """Вспышка фейерверка: 4 кадра расходящегося круга (140×140)."""
+    s, t = 140, i % 4
+    im = Image.new('RGBA', (s, s), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    r = [14, 30, 44, 52][t]
+    a = [250, 200, 120, 50][t]
+    col = [(255, 240, 180), (255, 200, 90), (255, 160, 80), (255, 220, 150)][t]
+    d.ellipse([s / 2 - r, s / 2 - r, s / 2 + r, s / 2 + r], fill=(*col, a))
+    for k in range(8):
+        ang = k * math.pi / 4
+        x1 = s / 2 + math.cos(ang) * r
+        y1 = s / 2 + math.sin(ang) * r
+        x2 = s / 2 + math.cos(ang) * (r + 10 + t * 4)
+        y2 = s / 2 + math.sin(ang) * (r + 10 + t * 4)
+        d.line([(x1, y1), (x2, y2)], fill=col, width=4)
+    return im
+
 
 def pixel():
     Image.new('RGBA', (8, 8), (0, 0, 0, 0)).save(f'{UI}/px.png')
@@ -376,5 +624,41 @@ if __name__ == '__main__':
     countdown()
     particles()
     pixel()
+    effect_wink_closed().save(f'{SPR}/mila_wink_closed.png')
+    effect_owl_wings(0).save(f'{SPR}/owl_wing_closed.png')
+    effect_owl_wings(1).save(f'{SPR}/owl_wing_open.png')
+    effect_smoke_puff(0).save(f'{SPR}/fx_smoke_0.png')
+    effect_smoke_puff(1).save(f'{SPR}/fx_smoke_1.png')
+    effect_smoke_puff(2).save(f'{SPR}/fx_smoke_2.png')
+    effect_flame(0).save(f'{SPR}/fx_flame_0.png')
+    effect_flame(1).save(f'{SPR}/fx_flame_1.png')
+    effect_flame(2).save(f'{SPR}/fx_flame_2.png')
+    effect_flame(3).save(f'{SPR}/fx_flame_3.png')
+    effect_lantern(0).save(f'{SPR}/fx_lantern_0.png')
+    effect_lantern(1).save(f'{SPR}/fx_lantern_1.png')
+    effect_lantern(2).save(f'{SPR}/fx_lantern_2.png')
+    effect_lantern(3).save(f'{SPR}/fx_lantern_3.png')
+    effect_firefly(0).save(f'{SPR}/fx_firefly_0.png')
+    effect_firefly(1).save(f'{SPR}/fx_firefly_1.png')
+    effect_firefly(2).save(f'{SPR}/fx_firefly_2.png')
+    effect_firefly(3).save(f'{SPR}/fx_firefly_3.png')
+    effect_snow_streaks(0).save(f'{SPR}/fx_snow_0.png')
+    effect_snow_streaks(1).save(f'{SPR}/fx_snow_1.png')
+    effect_snow_streaks(2).save(f'{SPR}/fx_snow_2.png')
+    effect_snow_streaks(3).save(f'{SPR}/fx_snow_3.png')
+    effect_snow_streaks(4).save(f'{SPR}/fx_snow_4.png')
+    effect_blizzard(0).save(f'{SPR}/fx_blizzard_0.png')
+    effect_blizzard(1).save(f'{SPR}/fx_blizzard_1.png')
+    effect_blizzard(2).save(f'{SPR}/fx_blizzard_2.png')
+    effect_blizzard(3).save(f'{SPR}/fx_blizzard_3.png')
+    effect_explosion(0).save(f'{SPR}/fx_explosion_0.png')
+    effect_explosion(1).save(f'{SPR}/fx_explosion_1.png')
+    effect_explosion(2).save(f'{SPR}/fx_explosion_2.png')
+    effect_explosion(3).save(f'{SPR}/fx_explosion_3.png')
+    mila_run_frame()
+    mila_blink()
+    santa_blink()
+    snowman_blink()
+    owl_flap_frames()
     ph = placeholders()
     print('UI готов. Заглушки:', ', '.join(ph) if ph else 'нет (все спрайты на месте)')
