@@ -5,6 +5,7 @@
 """
 import math
 import os
+import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
@@ -67,7 +68,7 @@ def titles():
     # ВАЖНО: строки не должны наезжать друг на друга — подпись идёт с чистым зазором
     t = text_img('ПОСЛЕДНЯЯ', 96)
     t2 = text_img('ПОСЫЛКА', 108)
-    sub = text_img('Scratch 3.0 · версия 1.8', 30, color=CREAM, stroke=4)
+    sub = text_img('Scratch 3.0 · версия 1.9', 30, color=CREAM, stroke=4)
     gap = 14
     w = max(t.width, t2.width, sub.width) + 40
     h = t.height + t2.height + sub.height + gap * 2
