@@ -344,7 +344,16 @@ def _blink_frame(src_path, out_path, ylo, yhi, lid_h=10, lid_a=235):
 
 
 def santa_blink():
-    _blink_frame(f'{SPR}/santa.png', f'{SPR}/santa_blink.png', 100, 150)
+    """Веко на глазах Санта: спрайт 315×420, глаза — левый x≈135-139,
+    правый x≈158-162, y≈63-66. Полоса y 100-150 (нос/борода) давала веко
+    не в месте — рисуем покрывочно точно на позициях глаз."""
+    src = Image.open(f'{SPR}/santa.png').convert('RGBA')
+    im = src.copy()
+    d = ImageDraw.Draw(im, 'RGBA')
+    for cx in (137, 160):  # центры глаз
+        d.rounded_rectangle([cx - 6, 61, cx + 6, 68],
+                            radius=3, fill=(20, 14, 12, 235))
+    im.save(f'{SPR}/santa_blink.png')
 
 
 def snowman_blink():
