@@ -15,6 +15,7 @@
 """
 import json
 import os
+import sys
 import zipfile
 
 from PIL import Image
@@ -23,7 +24,9 @@ R = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 OUT = f'{R}/art/mock/frames'
 W, H = 960, 720                      # рендер 2x от сцены 480x360
 SB3 = f'{R}/dist/Poslednyaya_posylka.sb3'
-FRAMES = f'{R}/dist/frames.json'
+# Optional: pass the frames JSON as argv[1] to audit a different set (e.g.
+# frames_tw.json produced by the TurboWarp VM).
+FRAMES = sys.argv[1] if len(sys.argv) > 1 else f'{R}/dist/frames.json'
 
 # Порядок слоёв «как задумано» (в sb3 порядок задаётся блоками «перейти на передний/
 # задний план», здесь он зафиксирован явно — так отчёт воспроизводим).
