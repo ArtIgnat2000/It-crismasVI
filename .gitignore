@@ -12,3 +12,6 @@ dist/_test.sb3
 # исходники картинок до нормализации (история всё равно хранит их в коммитах)
 art/raw/
 dist/frames.json
+# проверка на TurboWarp: форк VM ставится tools/setup_tw.sh по demand
+tools/tw-vm/
+dist/frames_tw.json
