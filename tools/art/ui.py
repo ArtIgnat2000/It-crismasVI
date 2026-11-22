@@ -5,6 +5,7 @@
 """
 import math
 import os
+import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
@@ -67,7 +68,7 @@ def titles():
     # ВАЖНО: строки не должны наезжать друг на друга — подпись идёт с чистым зазором
     t = text_img('ПОСЛЕДНЯЯ', 96)
     t2 = text_img('ПОСЫЛКА', 108)
-    sub = text_img('Scratch 3.0 · версия 1.8', 30, color=CREAM, stroke=4)
+    sub = text_img('Scratch 3.0 · версия 1.9', 30, color=CREAM, stroke=4)
     gap = 14
     w = max(t.width, t2.width, sub.width) + 40
     h = t.height + t2.height + sub.height + gap * 2
@@ -343,7 +344,16 @@ def _blink_frame(src_path, out_path, ylo, yhi, lid_h=10, lid_a=235):
 
 
 def santa_blink():
-    _blink_frame(f'{SPR}/santa.png', f'{SPR}/santa_blink.png', 100, 150)
+    """Веко на глазах Санта: спрайт 315×420, глаза — левый x≈135-139,
+    правый x≈158-162, y≈63-66. Полоса y 100-150 (нос/борода) давала веко
+    не в месте — рисуем покрывочно точно на позициях глаз."""
+    src = Image.open(f'{SPR}/santa.png').convert('RGBA')
+    im = src.copy()
+    d = ImageDraw.Draw(im, 'RGBA')
+    for cx in (137, 160):  # центры глаз
+        d.rounded_rectangle([cx - 6, 61, cx + 6, 68],
+                            radius=3, fill=(20, 14, 12, 235))
+    im.save(f'{SPR}/santa_blink.png')
 
 
 def snowman_blink():
@@ -370,10 +380,12 @@ def effect_wink_closed():
 
 def owl_flap_frame():
     """Кадр взмаха крыла Совы: левое крыло (область x<90) поднимается вверх-влево
-    вокруг плеча (88, 62) на 18°. Старое крыло стирается, чтобы не было
-    «двойного крыла»; крыло остаётся в области x<90 — лицо не перекрывается."""
+    вокруг плеча (87, 79) на 18°. Старое крыло стирается, чтобы не было
+    «двойного крыла»; крыло остаётся в области x<90 — лицо не перекрывается.
+    Плечо — верх крыла (x≈85-89, y≈78-80); старое значение (88, 62) было на
+    17 px выше крыла, поэтому вращение уводило крыло не туда."""
     base = Image.open(f'{SPR}/owl.png').convert('RGBA')
-    SHOULDER = (88, 62)
+    SHOULDER = (87, 79)
     # 1) стираем старое крыло (x < 90)
     arr = np.array(base)
     arr[:, :90, 3] = 0
