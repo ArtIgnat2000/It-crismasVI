@@ -210,6 +210,7 @@ h.var('на_земле', 1)
 h.var('поза', 'idle')   # текущая поза (idle/run/jump/cheer) — для мигания
 h.var('шаг', 0)         # счётчик кадров бега
 h.var('миг', 0)         # флаг мигания (защита от конфликта с чередованием кадров)
+h.var('покачка', 0)     # пролог-анимация Милы активна (до Акт1, не в финале)
 
 h.script(when_flag(),
          hide(), set_size(HERO_SIZE), rotation_style('left-right'), point_dir(90),
@@ -244,6 +245,7 @@ h.script(when_flag(), forever(
 # --- Акт 1: бег с прыжками
 h.script(when_bcast('Акт1'),
          show(), set_size(HERO_SIZE), goto(-150, GROUND), point_dir(90),
+         setv('покачка', 0),
          costume('run'), setv('поза', 'run'), setv('шаг', 0),
          setv('vy', 0), setv('на_земле', 1), set_effect('GHOST', 0),
          until(not_act(1),
@@ -317,7 +319,18 @@ h.script(when_bcast('Проигрыш'), show(), clear_fx(), goto(-140, -80), se
 # --- реплики: текст показывает спрайт «Плашка» (субтитры внизу),
 #     здесь — только озвучка и мизансцена. Никаких облачков над сценой.
 h.script(when_bcast('Реп2'), show(), goto(95, -78), set_size(HERO_SIZE),
-         costume('idle'), setv('поза', 'idle'), point_dir(90), clear_fx())
+         costume('idle'), setv('поза', 'idle'), point_dir(90), clear_fx(),
+         setv('покачка', 1))
+# --- первая сцена (пролог): Козочка стоит на сцене и оживает — плавная
+#     покачка влево-вправо + дыхание (анимация везде, не только в финале).
+#     Скрипт на флаге (не на рассылке): forever на рассылке блокировал бы
+#     bcast_wait('Реп2') в режиссёре. Покачка бездействует в Акт1+ (акт != 0),
+#     где положение Милы управляется её сценарием — без конфликта.
+h.script(when_flag(), forever(
+        if_(eq(var('покачка'), 1),
+            set_x(add(95, mul(7, mathop('sin', mul(timer(), 1.6))))),
+            set_y(add(-78, mul(3, mathop('sin', mul(timer(), 1.6)))))),
+        wait(0.05)))
 h.script(when_bcast('Реп3'), play('голос_3'))
 h.script(when_bcast('Реп5'), play('голос_5'))
 h.script(when_bcast('Реп7'), play('голос_7'))
@@ -558,14 +571,18 @@ mt.script(when_bcast('Акт3'),
 dm = Target('ДедМороз')
 dm.costume('дедмороз', f'{S}/santa.png')
 dm.costume('мороз_бlink', f'{S}/santa_blink.png')
+for nm, fn in [('осн', 'osn'), ('лево', 'lewo'), ('право', 'prawo')]:
+    dm.costume(nm, f'{S}/santa_{fn}.png')
 for nm, fn in [('голос_1', '01_narrator'), ('голос_2', '02_santa'),
                ('голос_8', '08_final'), ('голос_10', '10_outro')]:
     dm.sound(nm, f'{V}/{fn}.mp3')
 dm.size = 42
 dm.visible = False
 dm.rotation_style = 'left-right'
-dm.var('на_сцене', 0)   # на сцене? (для мигания/дыхания)
+dm.var('на_сцене', 0)   # на сцене? (для мигания/дыхания/движения)
+dm.var('осн_x', -120)   # основание x (основная позиция на сцене)
 dm.var('осн_y', -60)    # основание y для «дыхания»
+dm.var('миг', 0)        # счётчик покачиваний
 dm.script(when_flag(), hide(), setv('на_сцене', 0))
 dm.script(when_bcast('Сброс'), hide(), setv('на_сцене', 0))
 dm.script(when_bcast('Стоп'), hide(), setv('на_сцене', 0))
@@ -574,17 +591,19 @@ dm.script(when_bcast('Стоп'), hide(), setv('на_сцене', 0))
 # (раньше он стоял посреди улицы до самой крыши).
 dm.script(when_bcast('Реп1'), hide(), setv('на_сцене', 0), play('голос_1'))
 dm.script(when_bcast('Реп2'),
-         show(), goto(-120, -60), set_size(34), costume('дедмороз'), point_dir(90),
-         setv('на_сцене', 1), setv('осн_y', -60), reset_timer(), play('голос_2'))
+         show(), goto(-120, -60), set_size(34), costume('осн'), point_dir(90),
+         setv('на_сцене', 1), setv('осн_x', -120), setv('осн_y', -60), setv('миг', 0),
+         reset_timer(), play('голос_2'))
 dm.script(when_bcast('Реп8'),
-         show(), goto(-140, -75), set_size(28), costume('дедмороз'), point_dir(90),
-         setv('на_сцене', 1), setv('осн_y', -75), reset_timer(), play('голос_8'))
+         show(), goto(-140, -75), set_size(28), costume('осн'), point_dir(90),
+         setv('на_сцене', 1), setv('осн_x', -140), setv('осн_y', -75), setv('миг', 0),
+         reset_timer(), play('голос_8'))
 dm.script(when_bcast('Реп10'), play('голос_10'))
 dm.script(when_bcast('Акт1'), hide(), setv('на_сцене', 0))
 dm.script(when_bcast('Акт2'), hide(), setv('на_сцене', 0))
 dm.script(when_bcast('Акт3'), hide(), setv('на_сцене', 0))
 dm.script(when_bcast('Проигрыш'), hide(), setv('на_сцене', 0))
-# мигание + «дыхание» (едва заметная качка) — только когда на сцене
+# мигание + «дыхание» + покачивание влево-вправо (анимация движения) — только когда на сцене
 dm.script(when_flag(), forever(
         wait(0.35),
         if_(eq(var('на_сцене'), 1),
@@ -592,12 +611,27 @@ dm.script(when_flag(), forever(
         wait(1.7),
         if_(eq(var('на_сцене'), 1), costume('мороз_бlink')),
         wait(0.3),
-        if_(eq(var('на_сцене'), 1), costume('дедмороз'))))
+        if_(eq(var('на_сцене'), 1), costume('осн')),
+        # покачивание: шаг влево, шаг вправо, обратно к основанию
+        if_(eq(var('на_сцене'), 1),
+            if_(eq(mod(var('миг'), 3), 1),
+                goto(add(var('осн_x'), -11), add(var('осн_y'), 2)), costume('лево')),
+            if_(eq(mod(var('миг'), 3), 2),
+                goto(add(var('осн_x'), 11), add(var('осн_y'), 2)), costume('право')),
+        ),
+        wait(0.25),
+        if_(eq(var('на_сцене'), 1),
+            goto(var('осн_x'), add(var('осн_y'), mul(5, mathop('sin', mul(timer(), 2))))),
+            costume('осн')),
+        wait(0.25),
+        if_(eq(var('на_сцене'), 1), setv('миг', add(var('миг'), 1)))))
 
 # =================================================================  СНЕГОВИК
 sm = Target('Снеговик')
 sm.costume('снеговик', f'{S}/snowman.png')
 sm.costume('снег_бlink', f'{S}/snowman_blink.png')
+for nm, fn in [('осн', 'snow_osn'), ('лево', 'snow_left'), ('право', 'snow_right')]:
+    sm.costume(nm, f'{S}/{fn}.png')
 sm.sound('голос_4', f'{V}/04_snowman.mp3')
 sm.sound('скрип', f'{F}/sfx_step.mp3')
 sm.size = 20
@@ -606,15 +640,18 @@ sm.visible = False
 # в прологе он стоял вверх ногами (стиль «влево-вправо» только отражает спрайт)
 sm.rotation_style = 'left-right'
 sm.var('на_сцене', 0)
+sm.var('осн_x', 185)
 sm.var('осн_y', -88)
+sm.var('миг', 0)
 sm.script(when_flag(), hide(), setv('на_сцене', 0))
 sm.script(when_bcast('Сброс'), hide(), setv('на_сцене', 0))
 sm.script(when_bcast('Стоп'), hide(), setv('на_сцене', 0))
 sm.script(when_bcast('Реп4'),
-         show(), goto(185, -88), set_size(18), point_dir(-90),
-         setv('на_сцене', 1), setv('осн_y', -88), reset_timer(), play('голос_4'))
+         show(), goto(185, -88), set_size(18), costume('осн'), point_dir(-90),
+         setv('на_сцене', 1), setv('осн_x', 185), setv('осн_y', -88), setv('миг', 0),
+         reset_timer(), play('голос_4'))
 sm.script(when_bcast('Акт1'), hide(), setv('на_сцене', 0))
-# мигание + «дыхание» — только когда на сцене
+# мигание + «дыхание» + покачивание влево-вправо (анимация движения) — только когда на сцене
 sm.script(when_flag(), forever(
         wait(0.35),
         if_(eq(var('на_сцене'), 1),
@@ -622,7 +659,20 @@ sm.script(when_flag(), forever(
         wait(1.7),
         if_(eq(var('на_сцене'), 1), costume('снег_бlink')),
         wait(0.3),
-        if_(eq(var('на_сцене'), 1), costume('снеговик'))))
+        if_(eq(var('на_сцене'), 1), costume('осн')),
+        # покачивание: шаг влево, шаг вправо, обратно к основанию
+        if_(eq(var('на_сцене'), 1),
+            if_(eq(mod(var('миг'), 3), 1),
+                goto(add(var('осн_x'), -12), add(var('осн_y'), 1)), costume('лево')),
+            if_(eq(mod(var('миг'), 3), 2),
+                goto(add(var('осн_x'), 12), add(var('осн_y'), 1)), costume('право')),
+        ),
+        wait(0.25),
+        if_(eq(var('на_сцене'), 1),
+            goto(var('осн_x'), add(var('осн_y'), mul(4, mathop('sin', mul(timer(), 2))))),
+            costume('осн')),
+        wait(0.25),
+        if_(eq(var('на_сцене'), 1), setv('миг', add(var('миг'), 1)))))
 
 # ====================================================================  СОВА
 ov = Target('Сова')
@@ -652,23 +702,40 @@ ov.script(when_bcast('Акт2'),
 CW = (196, 126)  # центр часов на табло
 cf = Target('Часы_циферблат')
 cf.costume('часы', f'{U}/clock_face.png')
+for n in range(10):
+    cf.costume(f'цифра_{n}', f'{U}/count_{n}.png')
 cf.size = 20
 cf.x, cf.y = CW
-cf.script(when_flag(), show(), to_front(), set_size(20), goto(*CW))
-cf.script(when_bcast('Сброс'), show(), to_front(), set_size(20), goto(*CW))
+# Счётчик: в Акт3 на циферблате — цифра оставшегося отсчёта (осталось 20->0
+# по модулю 10); в прологе/актах 1-2 — обычный циферблат. Циферблат не уходит
+# за край экрана (260×260 по размеру 20 = 130 px по центру CW=(196, 126)).
+cf.script(when_flag(), show(), to_front(), set_size(20), goto(*CW),
+          forever(ifelse(eq(var('акт'), 3),
+                         [if_(eq(mod(var('осталось'), 10), n), costume(f'цифра_{n}'))
+                          for n in range(10)],
+                         [costume('часы')])))
+cf.script(when_bcast('Сброс'), show(), to_front(), set_size(20), goto(*CW),
+          forever(ifelse(eq(var('акт'), 3),
+                         [if_(eq(mod(var('осталось'), 10), n), costume(f'цифра_{n}'))
+                          for n in range(10)],
+                         [costume('часы')])))
 
 # минутная стрелка: длинная, полный оборот за 150 с (2.4°/с)
 cm = Target('Часы_минутная')
 cm.costume('минутная', f'{U}/clock_hand_min.png', center=(11, 75))
+cm.costume('указатель', f'{U}/clock_hand_min.png', center=(11, 75))
 cm.size = 30
 cm.x, cm.y = CW
+# «указатель» — стрелка во время подсветки цифры счётчика
 cm.script(when_flag(), show(), to_front(), set_size(30), goto(*CW),
-          forever(point_dir(mul(sub(150, var('время')), 2.4))))
+          forever(point_dir(mul(sub(150, var('время')), 2.4)),
+                  costume('указатель')))
 cm.script(when_bcast('Сброс'), show(), to_front(), set_size(30), goto(*CW))
 
 # часовая стрелка: короткая, 1/12 скорости минутной (0.2°/с)
 ch = Target('Часы_часовая')
 ch.costume('часовая', f'{U}/clock_hand_hr.png', center=(15, 48))
+ch.costume('указатель', f'{U}/clock_hand_hr.png', center=(15, 48))
 ch.size = 22
 ch.x, ch.y = CW
 ch.script(when_flag(), show(), to_front(), set_size(22), goto(*CW),
@@ -942,21 +1009,11 @@ fd.script(when_bcast('Осветлить'), to_front(),
           repeat(8, change_effect('GHOST', 12.5), wait(0.03)))
 
 # ==========================================================  ОБРАТНЫЙ ОТСЧЁТ
-# Цель третьего акта на табло: счётчик 20 -> 0 в верхней полосе HUD. Раньше
-# переменная «осталось» считалась, но на экране её не было — цель акта 3
-# была невидима и неизмерима.
-cd = Target('Обратный отсчёт')
-for n in range(21):
-    cd.costume(f'{n}', f'{U}/count_{n}.png')
-cd.size = 22
-cd.x, cd.y = 0, 130
-cd.visible = False
-cd.script(when_flag(), hide())
-cd.script(when_bcast('Сброс'), hide())
-cd.script(when_bcast('Стоп'), hide())
-cd.script(when_bcast('Акт3'),
-          show(), to_front(), set_size(22), goto(245, 190),
-          forever(*[if_(eq(var('осталось'), n), costume(f'{n}')) for n in range(20, -1, -1)]))
+# Счётчик обратного отсчёта выведен на циферблат часов (спрайт «Часы_циферблат»,
+# костюмы «цифра_N»): цифра = время % 10. Старый отдельный счётчик убран —
+# его позиция (245, 190) выходила за правый край экрана (жалопa №1).
+# Цель акта 3 понятна: стрелки часов показывают оставшееся время, цифра на
+# циферблате — текущую секунду отсчёта.
 
 # ===================================================================  КНОПКИ
 btn = Target('Кнопка')
@@ -1018,6 +1075,6 @@ for idx, name in [(1, 'мастерская'), (2, 'город'), (3, 'лес'),
 def build_project():
     p = Project()
     for t in [stage, d, mz, snow, tr, dr, sn, st, sl, h, g, ov, sm, dm, mt,
-              cf, cm, ch, lv, sc, cd, ek, sub, cap, y27, fw, fd, btn, bs]:
+              cf, cm, ch, lv, sc, ek, sub, cap, y27, fw, fd, btn, bs]:
         p.add(t)
     return p
