@@ -5,13 +5,17 @@
 """
 import math
 import os
+import random
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 UI = os.path.join(ROOT, 'art', 'ui')
 SPR = os.path.join(ROOT, 'art', 'sprites')
+BG = os.path.join(ROOT, 'art', 'backgrounds')
 os.makedirs(UI, exist_ok=True)
+os.makedirs(SPR, exist_ok=True)
+os.makedirs(BG, exist_ok=True)
 
 GOLD = (255, 201, 107)
 CREAM = (245, 241, 230)
@@ -68,7 +72,7 @@ def titles():
     # ВАЖНО: строки не должны наезжать друг на друга — подпись идёт с чистым зазором
     t = text_img('ПОСЛЕДНЯЯ', 96)
     t2 = text_img('ПОСЫЛКА', 108)
-    sub = text_img('Scratch 3.0 · версия 1.9', 30, color=CREAM, stroke=4)
+    sub = text_img('Scratch 3.0 · версия 1.10', 30, color=CREAM, stroke=4)
     gap = 14
     w = max(t.width, t2.width, sub.width) + 40
     h = t.height + t2.height + sub.height + gap * 2
@@ -575,6 +579,169 @@ def pixel():
     Image.new('RGBA', (960, 720), (6, 10, 24, 255)).save(f'{UI}/fade.png')
 
 
+# ==================================================================  ВИЗУАЛ 1.10
+# Параллакс-слои фонов, атмосферное небо, снежная завеса переходов,
+# тени, снег на шапках, свечение глаз, виньетка.
+
+
+def _edge_extend(im, new_w):
+    """Расширить полотно в ширину до new_w, продлевая крайние столбцы —
+    чтобы при сдвиге фона (параллакс) не обнажались края экрана."""
+    w, h = im.size
+    dx = (new_w - w) // 2
+    out = Image.new('RGBA', (new_w, h), (0, 0, 0, 0))
+    out.paste(im, (dx, 0), im)
+    if dx > 0:
+        lc = im.crop((0, 0, 1, h)).resize((dx, h), Image.NEAREST)
+        rc = im.crop((w - 1, 0, w, h)).resize((dx, h), Image.NEAREST)
+        out.paste(lc, (0, 0), lc)
+        out.paste(rc, (new_w - dx, 0), rc)
+    return out
+
+
+def _moon(d, cx, cy, r):
+    """Луна с мягким галоном и кратером."""
+    d.ellipse([cx - r * 2.2, cy - r * 2.2, cx + r * 2.2, cy + r * 2.2],
+              fill=(214, 230, 255, 48))
+    d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=(242, 250, 255, 238))
+    d.ellipse([cx - r * 0.7, cy - r * 0.45, cx - r * 0.25, cy - r * 0.05],
+              fill=(216, 229, 246, 130))
+    d.ellipse([cx + r * 0.2, cy + r * 0.15, cx + r * 0.55, cy + r * 0.5],
+              fill=(216, 229, 246, 110))
+
+
+def parallax_bg():
+    """Разбить фон на два слоя: дальний (небо + силуэты, верх 55%) и
+    ближний (земля/дома, низ 45%). Полотно расширяется до 1600 px —
+    сдвиг параллакса (факторы 0.12 / 0.3) не обнажит края.
+    Ночные фон (город/лес) получают луну."""
+    W2 = 1600
+    for fn in ('bg_city', 'bg_forest', 'bg_roof'):
+        im = Image.open(f'{BG}/{fn}.jpg').convert('RGBA')
+        w, h = im.size
+        canvas = _edge_extend(im, W2)
+        sky_h = int(h * 0.55)
+        sky = canvas.crop((0, 0, W2, sky_h))
+        ground = canvas.crop((0, sky_h, W2, h))
+        if fn in ('bg_city', 'bg_forest'):
+            d = ImageDraw.Draw(sky)
+            _moon(d, W2 * 0.78, sky_h * 0.22, int(sky_h * 0.085))
+        sky.save(f'{BG}/{fn}_far.png')
+        ground.save(f'{BG}/{fn}_near.png')
+
+
+def stars_sky():
+    """Звёздное небо-оверлей: 3 кадра с разным распределением/яркостью
+    звёзд — для мерцания (чередование костюмов)."""
+    for i in range(3):
+        im = Image.new('RGBA', (960, 720), (0, 0, 0, 0))
+        d = ImageDraw.Draw(im)
+        rng = random.Random(1000 + i)
+        for _ in range(95):
+            x = rng.randint(10, 950)
+            y = rng.randint(10, 360)
+            r = rng.choice([1, 1, 1, 2, 2])
+            a = rng.randint(150, 255) if i == 0 else rng.randint(90, 255)
+            d.ellipse([x - r, y - r, x + r, y + r], fill=(255, 255, 255, a))
+        im.save(f'{UI}/stars_sky_{i}.png')
+
+
+def clouds_sky():
+    """Плывущие облака-оверлей (прозрачный низ)."""
+    im = Image.new('RGBA', (960, 720), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    rng = random.Random(7)
+    for _ in range(5):
+        x = rng.randint(-120, 1040)
+        y = rng.randint(70, 300)
+        rx = rng.randint(70, 130)
+        ry = rng.randint(26, 46)
+        d.ellipse([x - rx, y - ry, x + rx, y + ry], fill=(228, 238, 252, 58))
+        d.ellipse([x - rx * 0.6, y - ry * 1.3, x + rx * 0.7, y + ry * 0.6],
+                  fill=(236, 244, 253, 46))
+    im.save(f'{UI}/clouds_sky.png')
+
+
+def veil_snow():
+    """Снежная завеса для атмосферного перехода: плотная тёмная текстура
+    с диагональными снежными разводами — веер движется по экрану."""
+    im = Image.new('RGBA', (960, 720), (10, 18, 36, 240))
+    d = ImageDraw.Draw(im)
+    rng = random.Random(42)
+    for _ in range(240):
+        x = rng.randint(0, 960)
+        y = rng.randint(0, 720)
+        ln = rng.randint(30, 130)
+        a = rng.randint(30, 95)
+        d.line([x, y, x + ln, y + ln * 0.6], fill=(235, 245, 255, a),
+               width=rng.randint(1, 3))
+    im.save(f'{UI}/veil_snow.png')
+
+
+def shadow_assets():
+    """Мягкая тень-эллипс под персонажем."""
+    im = Image.new('RGBA', (150, 46), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    for i in range(23, 0, -1):
+        r = i * 3.3
+        a = int(115 * (i / 23) ** 1.5)
+        d.ellipse([75 - r, 23 - r * 0.3, 75 + r, 23 + r * 0.3],
+                  fill=(5, 10, 24, a))
+    im.save(f'{SPR}/shadow.png')
+
+
+def _puffs(d, cx, cy, spread, n, alpha=235):
+    rng = random.Random(99)
+    for _ in range(n):
+        ang = rng.uniform(0, 2 * math.pi)
+        x = cx + math.cos(ang) * spread
+        y = cy + math.sin(ang) * spread * 0.5
+        for i in range(4, 0, -1):
+            r = i * 2.3
+            a = int(alpha * (i / 4))
+            d.ellipse([x - r, y - r, x + r, y + r], fill=(250, 252, 255, a))
+
+
+def snowcap_santa():
+    """Снег на шапке/плече Санты."""
+    im = Image.new('RGBA', (96, 42), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    _puffs(d, 48, 21, 28, 8)
+    im.save(f'{SPR}/snow_santa.png')
+
+
+def snowcap_snowman():
+    """Снег на шапке Снеговика."""
+    im = Image.new('RGBA', (64, 28), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    _puffs(d, 32, 14, 19, 5)
+    im.save(f'{SPR}/snow_snowman.png')
+
+
+def snowcap_mila():
+    """Снег на холке/ушах Милы."""
+    im = Image.new('RGBA', (74, 34), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    _puffs(d, 37, 17, 23, 6)
+    im.save(f'{SPR}/snow_mila.png')
+
+
+def _glow(path, r):
+    im = Image.new('RGBA', (r * 4, r * 4), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    for i in range(r * 2, 0, -1):
+        a = int(190 * (1 - i / (r * 2)) ** 2)
+        d.ellipse([r * 2 - i, r * 2 - i, r * 2 + i, r * 2 + i],
+                  fill=(200, 225, 255, a))
+    im.save(path)
+
+
+def eyeglow_assets():
+    """Свечение глаз: для Совы (большие глаза) и Снеговика."""
+    _glow(f'{SPR}/glow_owl.png', 26)
+    _glow(f'{SPR}/glow_snowman.png', 18)
+
+
 # ------------------------------------------------------------------ заглушки
 def placeholders():
     """Простые фигуры на месте спрайтов, которых ещё нет (перекрываются AI-артом)."""
@@ -706,5 +873,14 @@ if __name__ == '__main__':
     santa_sway()
     snowman_sway()
     owl_flap_frames()
+    parallax_bg()
+    stars_sky()
+    clouds_sky()
+    veil_snow()
+    shadow_assets()
+    snowcap_santa()
+    snowcap_snowman()
+    snowcap_mila()
+    eyeglow_assets()
     ph = placeholders()
     print('UI готов. Заглушки:', ', '.join(ph) if ph else 'нет (все спрайты на месте)')
