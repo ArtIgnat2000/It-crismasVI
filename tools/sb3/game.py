@@ -19,6 +19,7 @@ from sb import *  # noqa: E402
 R = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 S = f'{R}/art/sprites'
 B = f'{R}/art/backgrounds'
+BG = B
 U = f'{R}/art/ui'
 M = f'{R}/audio/music'
 F = f'{R}/audio/foley'
@@ -91,6 +92,108 @@ for v, init in [('игра', 0), ('акт', 0), ('жизни', 3), ('звёзд�
                 ('осталось', 0), ('музыка', 0), ('звук_вкл', 1), ('старт_идёт', 0)]:
     stage.var(v, init)
 
+# ================================================================  ОВЕРЛЭИ
+# Атмосферные оверлей-акторы 1.10: тень под персонажем, снег на шапке,
+# свечение глаз. Они не клонируются — один экземпляр, который следует за
+# персонажем (x/y) и появляется/скрывается вместе с ним.
+# Управление: broadcast «Вкл_<имя>» — показать, «Скр_<имя>» — скрыть.
+def overlay_actor(name, costume, target, dx=0, dy=0, scale=1):
+    t = Target(name)
+    t.costume('ов', f'{S}/{costume}')
+    t.size = scale
+    t.visible = False
+    t.script(when_flag(), hide(), goto(0, 0))
+    t.script(when_bcast('Сброс'), hide())
+    t.script(when_bcast('Стоп'), hide())
+    t.script(when_bcast(f'Вкл_{name}'), show())
+    t.script(when_bcast(f'Скр_{name}'), hide())
+    t.script(when_flag(), forever(
+        goto(add(of_prop(target, 'x position'), dx),
+             add(of_prop(target, 'y position'), dy)),
+        wait(0.05)))
+    return t
+
+
+# оверлей-акторы: тени, снег на шапках, свечение глаз
+ov_mila_sh = overlay_actor('Тень_Мила', 'shadow.png', 'Мила', 0, 30, 18)
+ov_mila_sn = overlay_actor('Снег_Мила', 'snow_mila.png', 'Мила', -10, -40, 16)
+ov_sled_sh = overlay_actor('Тень_Сани', 'shadow.png', 'Сани', 0, 26, 18)
+ov_gift_sh = overlay_actor('Тень_Подарок', 'shadow.png', 'Подарок', 0, 28, 16)
+ov_star_sh = overlay_actor('Тень_Звезда', 'shadow.png', 'Звезда', 0, 30, 16)
+ov_dr_sh = overlay_actor('Тень_Сугроб', 'shadow.png', 'Сугроб', 0, 24, 16)
+ov_tr_sh = overlay_actor('Тень_Снежок', 'shadow.png', 'Снежок', 0, 30, 16)
+ov_dm_sh = overlay_actor('Тень_ДедМороз', 'shadow.png', 'ДедМороз', 0, 34, 26)
+ov_dm_sn = overlay_actor('Снег_ДедМороз', 'snow_santa.png', 'ДедМороз', -6, -30, 18)
+ov_sm_sh = overlay_actor('Тень_Снеговик', 'shadow.png', 'Снеговик', 0, 36, 20)
+ov_sm_sn = overlay_actor('Снег_Снеговик', 'snow_snowman.png', 'Снеговик', -4, -42, 16)
+ov_owl_sh = overlay_actor('Тень_Сова', 'shadow.png', 'Сова', 0, 32, 16)
+
+# Параллакс-слои фонов: дальний слой (небо + силуэты), звёздное небо,
+# облака и ближний слой (земля/дома) — сдвигаются при движении Милы.
+parallax_actors = {}
+for pkey, fn, z in [
+    ('far_city', 'bg_city_far.png', 2),
+    ('far_forest', 'bg_forest_far.png', 2),
+    ('far_roof', 'bg_roof_far.png', 2),
+    ('stars', 'stars_sky_0.png', 4),
+    ('stars2', 'stars_sky_1.png', 4),
+    ('stars3', 'stars_sky_2.png', 4),
+    ('clouds', 'clouds_sky.png', 5),
+    ('near_city', 'bg_city_near.png', 6),
+    ('near_forest', 'bg_forest_near.png', 6),
+    ('near_roof', 'bg_roof_near.png', 6),
+]:
+    t = Target(f'Параллакс_{pkey}')
+    # stars/clouds — в art/ui, остальные — в art/backgrounds
+    t.costume('ов', f'{U}/{fn}' if pkey in ('stars', 'stars2', 'stars3', 'clouds')
+              else f'{BG}/{fn}')
+    t.size = 100
+    t.visible = False
+    t.script(when_flag(), hide())
+    t.script(when_bcast('Сброс'), hide())
+    t.script(when_bcast('Стоп'), hide())
+    # управление по broadcast: «Пара_<название>» — показать
+    t.script(when_bcast(f'Пара_{pkey}'), show())
+    parallax_actors[pkey] = t
+# звёздам — три костюма для мерцания
+for pkey in ('stars', 'stars2', 'stars3'):
+    for i in (0, 1, 2):
+        parallax_actors[pkey].costume(f'{i}', f'{U}/stars_sky_{i}.png')
+
+# виньетка: статичный оверлей, затемняет края экрана (внизу слоя)
+vgn = Target('Виньетка')
+vgn.costume('ов', f'{BG}/overlay_vignette.png')
+vgn.size = 100
+vgn.visible = False
+vgn.script(when_flag(), hide(), goto(0, 0))
+vgn.script(when_bcast('Сброс'), hide())
+vgn.script(when_bcast('Стоп'), hide())
+vgn.script(when_bcast('ВиньеткаВкл'), show(), to_back())
+
+# Скрипты параллакс-слоёв: мерцание звёзд и сдвиг при движении Милы
+parallax_actors['stars'].script(when_flag(), forever(
+    wait(rnd(0.8, 1.6)),
+    costume('1'), wait(rnd(0.8, 1.6)),
+    costume('2'), wait(rnd(0.8, 1.6)),
+    costume('0')))
+parallax_actors['stars2'].script(when_flag(), forever(
+    wait(rnd(0.8, 1.6)),
+    costume('2'), wait(rnd(0.8, 1.6)),
+    costume('0'), wait(rnd(0.8, 1.6)),
+    costume('1')))
+parallax_actors['stars3'].script(when_flag(), forever(
+    wait(rnd(0.8, 1.6)),
+    costume('1'), wait(rnd(0.8, 1.6)),
+    costume('2'), wait(rnd(0.8, 1.6)),
+    costume('0')))
+for pkey, factor in [('far_city', 0.12), ('far_forest', 0.12), ('far_roof', 0.12),
+                     ('stars', 0.05), ('stars2', 0.05), ('stars3', 0.05),
+                     ('clouds', 0.08), ('near_city', 0.25),
+                     ('near_forest', 0.25), ('near_roof', 0.25)]:
+    parallax_actors[pkey].script(when_flag(), forever(
+        goto(mul(factor, of_prop('Мила', 'x position')), 0), wait(0.05)))
+
+
 # =================================================================  РЕЖИССЁР
 d = Target('Режиссёр')
 d.costume('px', f'{U}/px.png')
@@ -110,6 +213,9 @@ act1 = [
     setv('акт', 1), setv('скорость', 4.2),
     setv('музыка', 0), bcast('МузыкаСтоп'), wait(0.06), setv('музыка', 2),
     bcast_wait('Затемнить'), backdrop('город'), bcast_wait('Осветлить'),
+    bcast('Пара_far_city'), bcast('Пара_near_city'),
+    bcast('Пара_stars'), bcast('Пара_stars2'), bcast('Пара_stars3'),
+    bcast('Пара_clouds'),
     bcast('Акт1'),
     until(or_(gt(var('звёзды'), 4), or_(lt(var('жизни'), 1), lt(var('время'), 1))), wait(0.1)),
     bcast_wait('Реп5'),
@@ -118,11 +224,14 @@ act1 = [
 
 act2 = [
     setv('акт', 2), setv('скорость', 6.5),
+    bcast('ВиньеткаВкл'),
     # каждый акт — свой заход: сердечки восстанавливаются, счёт звёзд начинается с 0,
     # чтобы на табло всегда было видно «сколько ещё до цели» (5 звёзд за акт)
     setv('жизни', 3), setv('звёзды', 0),
     setv('музыка', 0), bcast('МузыкаСтоп'), wait(0.06), setv('музыка', 3),
     bcast_wait('Затемнить'), backdrop('лес'), bcast_wait('Осветлить'),
+    bcast('Пара_far_forest'), bcast('Пара_near_forest'),
+    bcast('Пара_stars'), bcast('Пара_stars2'), bcast('Пара_stars3'),
     bcast('Акт2'),
     until(or_(gt(var('звёзды'), 4), or_(lt(var('жизни'), 1), lt(var('время'), 1))), wait(0.1)),
     setv('акт', 0), bcast('Стоп'), wait(0.3),
@@ -131,8 +240,10 @@ act2 = [
 act3 = [
     setv('акт', 3), setv('скорость', 6), setv('осталось', 20),
     setv('жизни', 3),
+    bcast('ВиньеткаВкл'),
     setv('музыка', 0), bcast('МузыкаСтоп'), wait(0.06), setv('музыка', 4),
     bcast_wait('Затемнить'), backdrop('крыша'), bcast_wait('Осветлить'),
+    bcast('Пара_far_roof'), bcast('Пара_near_roof'),
     bcast_wait('Реп6'),
     bcast('Акт3'),
     until(or_(lt(var('осталось'), 1), or_(lt(var('жизни'), 1), lt(var('время'), 1))), wait(0.1)),
@@ -142,6 +253,7 @@ act3 = [
 
 win = [
     setv('игра', 0), setv('старт_идёт', 0), setv('музыка', 0), bcast('МузыкаСтоп'), wait(0.06),
+    bcast('ВиньеткаВкл'),
     bcast_wait('Затемнить'), backdrop('победа'), bcast_wait('Осветлить'),
     setv('музыка', 5),
     bcast_wait('Победа'),
@@ -151,6 +263,7 @@ win = [
 
 lose = [
     setv('игра', 0), setv('старт_идёт', 0), setv('музыка', 0), bcast('МузыкаСтоп'), wait(0.06),
+    bcast('ВиньеткаВкл'),
     bcast_wait('Затемнить'), backdrop('проигрыш'), bcast_wait('Осветлить'),
     setv('музыка', 6),
     bcast_wait('Проигрыш'),
@@ -165,6 +278,9 @@ d.script(
     setv('музыка', 0), bcast('МузыкаСтоп'), wait(0.06),
     bcast('Сброс'), backdrop('мастерская'), wait(0.4),
     bcast('СнегИдёт'),
+    # параллакс-слои + звёзды + облака + виньетка. В прологе (дневная
+    # мастерская) параллакс/звёзды скрыты — включаются по актам.
+    bcast('ВиньеткаВкл'),
     setv('игра', 1),
     setv('музыка', 1),
     bcast_wait('Реп1'), bcast_wait('Реп2'), bcast_wait('Реп3'), bcast_wait('Реп4'),
@@ -214,6 +330,7 @@ h.var('покачка', 0)     # пролог-анимация Милы акти
 
 h.script(when_flag(),
          hide(), set_size(HERO_SIZE), rotation_style('left-right'), point_dir(90),
+         bcast('Вкл_Тень_Мила'), bcast('Вкл_Снег_Мила'),
          clear_fx(), setv('vy', 0), setv('на_земле', 1), setv('поза', 'idle'),
          setv('шаг', 0), setv('миг', 0))
 
@@ -222,7 +339,8 @@ h.script(when_bcast('Сброс'),
          setv('vy', 0), setv('на_земле', 1), setv('поза', 'idle'),
          setv('шаг', 0), setv('миг', 0), goto(-150, GROUND), point_dir(90))
 
-h.script(when_bcast('Стоп'), hide(), set_effect('GHOST', 0))
+h.script(when_bcast('Стоп'), hide(), set_effect('GHOST', 0),
+         bcast('Скр_Тень_Мила'), bcast('Скр_Снег_Мила'))
 
 # --- мигание: раз в ~3.4 с на 0.12 с переключаем костюм на «закрытые глаза»
 #    текущей позы, затем возвращаем. Поза хранится в «поза»; флаг «миг»
@@ -351,6 +469,7 @@ sl.script(when_bcast('Стоп'), hide())
 # санях через лес: платформа саней точно под ногами Милы.
 sl.script(when_bcast('Акт1'),
          show(), set_size(15), to_back(), reset_timer(),
+         bcast('Вкл_Тень_Сани'),
          until(not_act(1),
                # лёгкая тряска беготни: вертикальный кач + слегка кренится
                goto(add(of_prop('Мила', 'x position'), -60),
@@ -360,6 +479,7 @@ sl.script(when_bcast('Акт1'),
                wait(0)))
 sl.script(when_bcast('Акт2'),
          show(), set_size(30), to_back(), reset_timer(),
+         bcast('Вкл_Тень_Сани'),
          until(not_act(2),
                # полёт: плавный кач и ленивый крен саней в воздухе
                goto(add(of_prop('Мила', 'x position'), -6),
@@ -367,7 +487,7 @@ sl.script(when_bcast('Акт2'),
                         mul(5, mathop('sin', mul(timer(), 6))))),
                point_dir(add(90, mul(5, mathop('sin', mul(timer(), 6))))),
                wait(0)))
-sl.script(when_bcast('Акт3'), hide())
+sl.script(when_bcast('Акт3'), hide(), bcast('Скр_Тень_Сани'))
 
 # ================================================================  ПОДАРОК
 g = Target('Подарок')
@@ -377,7 +497,7 @@ g.size = 11
 g.visible = False
 g.script(when_flag(), hide())
 g.script(when_bcast('Сброс'), hide())
-g.script(when_bcast('Стоп'), hide())
+g.script(when_bcast('Стоп'), hide(), bcast('Скр_Тень_Подарок'))
 gift_spot = {1: (-34, 8, 9), 2: (8, -61, 10), 3: (-34, 4, 9)}
 for n in (1, 2, 3):
     gx, gy, gs = gift_spot[n]
@@ -393,6 +513,7 @@ for n in (1, 2, 3):
                    repeat(10, change_effect('BRIGHTNESS', 2), wait(0.04),
                           change_effect('BRIGHTNESS', -2), wait(0.04))))
 g.script(when_bcast('Победа'), show(), goto(-92, -92), set_size(12), play('магия'),
+         bcast('Вкл_Тень_Подарок'),
          repeat(30, turn_right(6), wait(0.03)))
 
 # ==================================================================  ЗВЕЗДА
@@ -404,7 +525,7 @@ st.visible = False
 st.var('клон', 0)
 st.script(when_flag(), hide(), setv('клон', 0))
 st.script(when_bcast('Сброс'), hide())
-st.script(when_bcast('Стоп'), hide())
+st.script(when_bcast('Стоп'), hide(), bcast('Скр_Тень_Звезда'))
 st.script(when_bcast('Стоп'), delete_clone())
 
 for n, period in [(1, 0.9), (2, 0.8)]:
@@ -423,6 +544,7 @@ for n, period in [(1, 0.9), (2, 0.8)]:
 # (для акта 2) в первом акте сразу видел «акт <> 2», выходил из цикла и удалял
 # звезду в момент рождения — поэтому звёзды не долетали до Милы.
 st.script(when_clone(), setv('клон', 1), show(), set_size(rnd(11, 14)), point_dir(0),
+         bcast('Вкл_Тень_Звезда'),
           # высота под акт: в первом акте только та, до которой Мила достаёт прыжком
           ifelse(eq(var('акт'), 1),
                  [goto(270, rnd(-100, -20))],
@@ -443,7 +565,7 @@ dr.visible = False
 dr.var('клон', 0)
 dr.script(when_flag(), hide(), setv('клон', 0))
 dr.script(when_bcast('Сброс'), hide())
-dr.script(when_bcast('Стоп'), hide())
+dr.script(when_bcast('Стоп'), hide(), bcast('Скр_Тень_Сугроб'))
 dr.script(when_bcast('Стоп'), delete_clone())
 dr.script(when_bcast('Акт1'),
          hide(),
@@ -455,6 +577,7 @@ dr.script(when_bcast('Акт1'),
                    )))
 dr.script(when_clone(), setv('клон', 1),
          show(), set_size(rnd(14, 17)), goto(280, -116),
+         bcast('Вкл_Тень_Сугроб'),
          until(or_(lt(x_pos(), -280), not_act(1)),
                change_x(mul(-1, var('скорость'))),
                # заденет, только если Мила низко (прыжок переносит её через сугроб)
@@ -473,7 +596,7 @@ tr.visible = False
 tr.var('клон', 0)
 tr.script(when_flag(), hide(), setv('клон', 0))
 tr.script(when_bcast('Сброс'), hide())
-tr.script(when_bcast('Стоп'), hide())
+tr.script(when_bcast('Стоп'), hide(), bcast('Скр_Тень_Снежок'))
 tr.script(when_bcast('Стоп'), delete_clone())
 tr.script(when_bcast('Акт2'),
          hide(),
@@ -485,6 +608,7 @@ tr.script(when_bcast('Акт2'),
                    )))
 tr.script(when_clone(), setv('клон', 1),
          show(), set_size(rnd(12, 15)), goto(280, rnd(-100, -66)),
+         bcast('Вкл_Тень_Снежок'),
          until(or_(lt(x_pos(), -280), not_act(2)),
                change_x(mul(-1, var('скорость'))),
                turn_right(1),
@@ -592,17 +716,28 @@ dm.script(when_bcast('Стоп'), hide(), setv('на_сцене', 0))
 dm.script(when_bcast('Реп1'), hide(), setv('на_сцене', 0), play('голос_1'))
 dm.script(when_bcast('Реп2'),
          show(), goto(-120, -60), set_size(34), costume('осн'), point_dir(90),
+         bcast('Вкл_Тень_ДедМороз'), bcast('Вкл_Снег_ДедМороз'),
          setv('на_сцене', 1), setv('осн_x', -120), setv('осн_y', -60), setv('миг', 0),
          reset_timer(), play('голос_2'))
 dm.script(when_bcast('Реп8'),
          show(), goto(-140, -75), set_size(28), costume('осн'), point_dir(90),
+         bcast('Вкл_Тень_ДедМороз'), bcast('Вкл_Снег_ДедМороз'),
          setv('на_сцене', 1), setv('осн_x', -140), setv('осн_y', -75), setv('миг', 0),
          reset_timer(), play('голос_8'))
 dm.script(when_bcast('Реп10'), play('голос_10'))
-dm.script(when_bcast('Акт1'), hide(), setv('на_сцене', 0))
-dm.script(when_bcast('Акт2'), hide(), setv('на_сцене', 0))
-dm.script(when_bcast('Акт3'), hide(), setv('на_сцене', 0))
-dm.script(when_bcast('Проигрыш'), hide(), setv('на_сцене', 0))
+dm.script(when_bcast('Акт1'), hide(), setv('на_сцене', 0),
+         bcast('Скр_Тень_ДедМороз'), bcast('Скр_Снег_ДедМороз'))
+dm.script(when_bcast('Акт2'), hide(), setv('на_сцене', 0),
+         bcast('Скр_Тень_ДедМороз'), bcast('Скр_Снег_ДедМороз'))
+dm.script(when_bcast('Акт3'), hide(), setv('на_сцене', 0),
+         bcast('Скр_Тень_ДедМороз'), bcast('Скр_Снег_ДедМороз'))
+dm.script(when_bcast('Проигрыш'), hide(), setv('на_сцене', 0),
+         bcast('Скр_Тень_ДедМороз'), bcast('Скр_Снег_ДедМороз'))
+# пухли-снега: слетают на шапку и тают (пока Дед Мороз на сцене)
+dm.script(when_bcast('Старт'), forever(
+    wait(0.6),
+    if_(eq(var('на_сцене'), 1), bcast('Пухляк')),
+    wait(0.6)))
 # мигание + «дыхание» + покачивание влево-вправо (анимация движения) — только когда на сцене
 dm.script(when_flag(), forever(
         wait(0.35),
@@ -626,6 +761,17 @@ dm.script(when_flag(), forever(
         wait(0.25),
         if_(eq(var('на_сцене'), 1), setv('миг', add(var('миг'), 1)))))
 
+# свечение глаз Снеговика (угольки-глаза мерцают в темноте)
+sm_glow = Target('ГлазСнег')
+sm_glow.costume('ов', f'{S}/glow_snowman.png')
+sm_glow.size = 40
+sm_glow.visible = False
+sm_glow.script(when_bcast('Старт'), hide(), set_effect('GHOST', 0), goto(0, 0))
+sm_glow.script(when_bcast('Сброс'), hide(), set_effect('GHOST', 0))
+sm_glow.script(when_bcast('Стоп'), hide())
+sm_glow.script(when_bcast('Скр_ГлазСнег'), hide())
+sm_glow.script(when_bcast('Вкл_ГлазСнег'), show())
+
 # =================================================================  СНЕГОВИК
 sm = Target('Снеговик')
 sm.costume('снеговик', f'{S}/snowman.png')
@@ -648,9 +794,30 @@ sm.script(when_bcast('Сброс'), hide(), setv('на_сцене', 0))
 sm.script(when_bcast('Стоп'), hide(), setv('на_сцене', 0))
 sm.script(when_bcast('Реп4'),
          show(), goto(185, -88), set_size(18), costume('осн'), point_dir(-90),
+         bcast('Вкл_Тень_Снеговик'), bcast('Вкл_Снег_Снеговик'),
+         bcast('Вкл_ГлазСнег'),
          setv('на_сцене', 1), setv('осн_x', 185), setv('осн_y', -88), setv('миг', 0),
          reset_timer(), play('голос_4'))
-sm.script(when_bcast('Акт1'), hide(), setv('на_сцене', 0))
+# свечение глаз: мерцает и следует за Снеговиком, пока он на сцене
+sm_glow.script(when_bcast('Реп4'), show(),
+               goto(of_prop('Снеговик', 'x position'),
+                    add(of_prop('Снеговик', 'y position'), -8)))
+sm_glow.script(when_bcast('Старт'), forever(
+    wait(0.3),
+    if_(gt(of_prop('Снеговик', 'y position'), -900),
+        goto(of_prop('Снеговик', 'x position'),
+             add(of_prop('Снеговик', 'y position'), -8)),
+        repeat(12, change_effect('GHOST', 12), wait(0.06),
+               change_effect('GHOST', -12), wait(0.06))),
+    wait(0.3)))
+sm.script(when_bcast('Акт1'), hide(), setv('на_сцене', 0),
+         bcast('Скр_Тень_Снеговик'), bcast('Скр_Снег_Снеговик'),
+         bcast('Скр_ГлазСнег'))
+# пухли-снега: слетают на шапку и тают (пока Снеговик на сцене)
+sm.script(when_bcast('Старт'), forever(
+        wait(0.5),
+        if_(eq(var('на_сцене'), 1), bcast('Пухляк2')),
+        wait(0.5)))
 # мигание + «дыхание» + покачивание влево-вправо (анимация движения) — только когда на сцене
 sm.script(when_flag(), forever(
         wait(0.35),
@@ -683,14 +850,17 @@ ov.size = 12
 ov.visible = False
 ov.script(when_flag(), hide())
 ov.script(when_bcast('Сброс'), hide())
-ov.script(when_bcast('Стоп'), hide())
+ov.script(when_bcast('Стоп'), hide(), bcast('Скр_Тень_Сова'))
 ov.script(when_bcast('Акт2'),
          show(), goto(-185, 70), set_size(12), costume('сова'),
+         bcast('Вкл_Тень_Сова'),
          until(not_act(2),
                set_y(add(70, mul(12, mathop('sin', mul(var('время'), 60))))),
                # взмахи крыльями: чередование костюмов (крыло поднято/опущено)
                next_costume(),
                if_(eq(mod(var('время'), 5), 0), play('уханье')),
+               # свечение глаз Совы в полёте
+               bcast('СовГлаз'),
                wait(0.35),
                ))
 
@@ -994,19 +1164,50 @@ fw2.script(when_clone(), setv('клон', 1),
            repeat(20, change_size(1.5), change_effect('GHOST', 5), wait(0.04)),
            delete_clone())
 
+# --- Атмосфера 1.10: пухли-снега на шапках персонажей и свечение глаз
+puff_santa = fx_actor('Пухли', ['snow_santa'], 1, [])
+puff_snowman = fx_actor('Пухли2', ['snow_snowman'], 1, [])
+puff_owl = fx_actor('СовГлаз', ['glow_owl'], 1, [])
+# пухли-снега: появляются у персонажа и тают
+for pf, tgt, off, bcast_name in [
+        (puff_santa, 'ДедМороз', (0, -40), 'Пухляк'),
+        (puff_snowman, 'Снеговик', (0, -44), 'Пухляк2'),
+        (puff_owl, 'Сова', (0, -30), 'СовГлаз')]:
+    pf.script(when_bcast(bcast_name),
+              goto(add(of_prop(tgt, 'x position'), off[0]),
+                   add(of_prop(tgt, 'y position'), off[1])),
+              set_effect('GHOST', 0), show(),
+              repeat(14,
+                     change_size(rnd(0.8, 1.3)), change_effect('GHOST', 8), wait(0.05)),
+              set_effect('GHOST', 0), hide())
+
 # ================================================================  ЗАТЕМНЕНИЕ
 fd = Target('Затемнение')
 fd.costume('чёрный', f'{U}/fade.png')
+fd.costume('завеса', f'{U}/veil_snow.png')
 fd.size = 100
 fd.visible = True
-fd.script(when_flag(), to_front(), set_size(100), set_effect('GHOST', 100), goto(0, 0))
+fd.script(when_flag(), to_front(), set_size(100), set_effect('GHOST', 0),
+          costume('чёрный'), goto(0, 0))
 # затмение-спрайт явно сбрасывается: после «Ещё раз» фад-переход не оставляет
 # чёрного экрана (состояние строго равно старту по флагу)
-fd.script(when_bcast('Сброс'), to_front(), set_size(100), set_effect('GHOST', 100), goto(0, 0))
-fd.script(when_bcast('Затемнить'), to_front(), set_size(100), set_effect('GHOST', 100),
-          repeat(8, change_effect('GHOST', -12.5), wait(0.03)))
-fd.script(when_bcast('Осветлить'), to_front(),
-          repeat(8, change_effect('GHOST', 12.5), wait(0.03)))
+fd.script(when_bcast('Сброс'), to_front(), set_size(100), set_effect('GHOST', 0),
+          costume('чёрный'), goto(0, 0))
+# Атмосферный переход: «Затемнить» — снежная завеса-веер всплывает и
+# медленно плывёт по экрану, затем растворяется; «Осветлить» — чёрная
+# завеса наплывает и растворяется. Веер накладывается мягким GHOST-эффектом.
+fd.script(when_bcast('Затемнить'), to_front(), set_size(100), costume('завеса'),
+          set_effect('GHOST', 100),
+          repeat(5,
+              change_effect('GHOST', -20), wait(0.04),
+              change_x(rnd(-60, 60)), change_y(rnd(-40, 40)), wait(0.04)),
+          set_effect('GHOST', 0))
+fd.script(when_bcast('Осветлить'), to_front(), set_size(100), costume('чёрный'),
+          set_effect('GHOST', 100),
+          repeat(5,
+              change_effect('GHOST', -20), wait(0.04),
+              change_x(rnd(-40, 40)), change_y(rnd(-30, 30)), wait(0.04)),
+          set_effect('GHOST', 0))
 
 # ==========================================================  ОБРАТНЫЙ ОТСЧЁТ
 # Счётчик обратного отсчёта выведен на циферблат часов (спрайт «Часы_циферблат»,
@@ -1074,7 +1275,14 @@ for idx, name in [(1, 'мастерская'), (2, 'город'), (3, 'лес'),
 
 def build_project():
     p = Project()
-    for t in [stage, d, mz, snow, tr, dr, sn, st, sl, h, g, ov, sm, dm, mt,
-              cf, cm, ch, lv, sc, ek, sub, cap, y27, fw, fd, btn, bs]:
+    actors = [stage, d, mz, snow, tr, dr, sn, st, sl, h, g, ov, sm, dm, mt,
+              cf, cm, ch, lv, sc, ek, sub, cap, y27, fw, fd, btn, bs]
+    # оверлей-акторы (тени, снег на шапках) и параллакс-слои фонов
+    actors += [vgn, sm_glow, puff_santa, puff_snowman, puff_owl]
+    actors += [ov_mila_sh, ov_mila_sn, ov_sled_sh, ov_gift_sh, ov_star_sh,
+               ov_dr_sh, ov_tr_sh, ov_dm_sh, ov_dm_sn, ov_sm_sh, ov_sm_sn,
+               ov_owl_sh]
+    actors += list(parallax_actors.values())
+    for t in actors:
         p.add(t)
     return p
