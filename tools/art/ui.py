@@ -312,7 +312,8 @@ def mila_run_frame():
     im.save(f'{SPR}/goat_run_b.png')
 
 
-def _blink_frame(src_path, out_path, ylo, yhi, lid_h=10, lid_a=235):
+def _blink_frame(src_path, out_path, ylo, yhi, lid_h=10, lid_a=235,
+                 lid_color=(190, 150, 120)):
     """Становящий кадр мигания: в лицевой полосе (y в [ylo,yhi]) находим
     тёмные кластеры (глаза) и рисуем по каждому тёмную полупрозрачную планку-веко.
     Покрытие по блоку тёмных пикселей — глаза гарантированно закрываются, даже
@@ -339,20 +340,21 @@ def _blink_frame(src_path, out_path, ylo, yhi, lid_h=10, lid_a=235):
         cx = int(xs[sel].mean())
         cy = int(ys[sel].mean()) + ylo
         d.rounded_rectangle([cx - 9, cy - lid_h // 2, cx + 9, cy + lid_h // 2],
-                            radius=lid_h // 2, fill=(20, 14, 12, lid_a))
+                            radius=lid_h // 2, fill=tuple(lid_color) + (lid_a,))
     im.save(out_path)
 
 
 def santa_blink():
     """Веко на глазах Санта: спрайт 315×420, глаза — левый x≈135-139,
     правый x≈158-162, y≈63-66. Полоса y 100-150 (нос/борода) давала веко
-    не в месте — рисуем покрывочно точно на позициях глаз."""
+    не в месте — рисуем покрывочно точно на позициях глаз.
+    Цвет века — телесный (к лицу), а не чёрный."""
     src = Image.open(f'{SPR}/santa.png').convert('RGBA')
     im = src.copy()
     d = ImageDraw.Draw(im, 'RGBA')
     for cx in (137, 160):  # центры глаз
         d.rounded_rectangle([cx - 6, 61, cx + 6, 68],
-                            radius=3, fill=(20, 14, 12, 235))
+                            radius=3, fill=(185, 145, 120, 235))
     im.save(f'{SPR}/santa_blink.png')
 
 
@@ -378,12 +380,39 @@ def effect_wink_closed():
     return im
 
 
+def sway_frame(src_path, out_path, dx, pad=16):
+    """Свэйп-кадр: сдвиг персонажа в сторону на dx px без обрезки края.
+    Canvas расширяется на 2*pad, содержимое смещается — спрайт-позиция
+    остаётся на месте, персонаж «переступает»."""
+    im = Image.open(src_path).convert('RGBA')
+    w, h = im.size
+    out = Image.new('RGBA', (w + 2 * pad, h), (0, 0, 0, 0))
+    out.paste(im, (pad + dx, 0), im)
+    out.save(out_path)
+
+
+def santa_sway():
+    """Костюмы покачивания Санты: осн + шаг влево/вправо."""
+    src = f'{SPR}/santa.png'
+    Image.open(src).convert('RGBA').save(f'{SPR}/santa_osn.png')
+    sway_frame(src, f'{SPR}/santa_lewo.png', -14)
+    sway_frame(src, f'{SPR}/santa_prawo.png', +14)
+
+
+def snowman_sway():
+    """Костюмы покачивания Снеговика: осн + шаг влево/вправо."""
+    src = f'{SPR}/snowman.png'
+    Image.open(src).convert('RGBA').save(f'{SPR}/snow_osn.png')
+    sway_frame(src, f'{SPR}/snow_left.png', -16)
+    sway_frame(src, f'{SPR}/snow_right.png', +16)
+
+
 def owl_flap_frame():
     """Кадр взмаха крыла Совы: левое крыло (область x<90) поднимается вверх-влево
-    вокруг плеча (87, 79) на 18°. Старое крыло стирается, чтобы не было
-    «двойного крыла»; крыло остаётся в области x<90 — лицо не перекрывается.
-    Плечо — верх крыла (x≈85-89, y≈78-80); старое значение (88, 62) было на
-    17 px выше крыла, поэтому вращение уводило крыло не туда."""
+    вокруг плеча (87, 79) на 10° (против часовой). Вращение -18° смещало
+    кончик крыла вправо — в тело (x≈160), отсюда «отрезается часть тела».
+    При +10° кончик смещается влево (x≈5) и вверх — крыло взмахивает
+    вверх-влево, тело не перекрывается. Плечо — верх крыла (x≈85-89, y≈78-80)."""
     base = Image.open(f'{SPR}/owl.png').convert('RGBA')
     SHOULDER = (87, 79)
     # 1) стираем старое крыло (x < 90)
@@ -394,8 +423,11 @@ def owl_flap_frame():
     wing = Image.open(f'{SPR}/owl.png').convert('RGBA').crop((0, 0, 90, base.height))
     canvas = Image.new('RGBA', base.size, (0, 0, 0, 0))
     canvas.paste(wing, (0, 0), wing)
-    rot = canvas.rotate(-18, resample=Image.BICUBIC, center=SHOULDER)
-    base.alpha_composite(rot)
+    rot = canvas.rotate(10, resample=Image.BICUBIC, center=SHOULDER)
+    # 3) лёгкий подъём вверх — взмах
+    lift = Image.new('RGBA', base.size, (0, 0, 0, 0))
+    lift.paste(rot, (0, -6), rot)
+    base.alpha_composite(lift)
     base.save(f'{SPR}/owl_open.png')
 
 
@@ -671,6 +703,8 @@ if __name__ == '__main__':
     mila_blink()
     santa_blink()
     snowman_blink()
+    santa_sway()
+    snowman_sway()
     owl_flap_frames()
     ph = placeholders()
     print('UI готов. Заглушки:', ', '.join(ph) if ph else 'нет (все спрайты на месте)')
