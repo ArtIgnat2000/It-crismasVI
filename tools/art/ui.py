@@ -6,7 +6,7 @@
 import math
 import os
 import numpy as np
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 UI = os.path.join(ROOT, 'art', 'ui')
@@ -407,32 +407,82 @@ def snowman_sway():
     sway_frame(src, f'{SPR}/snow_right.png', +16)
 
 
-def owl_flap_frame():
-    """Кадр взмаха крыла Совы: левое крыло (область x<90) поднимается вверх-влево
-    вокруг плеча (87, 79) на 10° (против часовой). Вращение -18° смещало
-    кончик крыла вправо — в тело (x≈160), отсюда «отрезается часть тела».
-    При +10° кончик смещается влево (x≈5) и вверх — крыло взмахивает
-    вверх-влево, тело не перекрывается. Плечо — верх крыла (x≈85-89, y≈78-80)."""
+# Полигон левого крыла Совы (viewer's left). Он НИКОГДА не захватывает шапку,
+# лицо и шарф: крыло начинается под шарфом (y ≥ 231) и идёт по внешнему
+# контуру тела до нижнего кончика пера (y ≈ 350).
+OWL_WING_POLY = [(54, 232), (36, 237), (26, 253), (21, 271), (24, 291), (31, 311),
+                 (42, 329), (55, 343), (72, 350), (86, 345), (98, 316),
+                 (102, 286), (98, 259), (88, 241), (72, 234)]
+# Плечевой сустав — верхняя внутренняя кромка крыла у шарфа.
+OWL_WING_PIVOT = (74, 232)
+
+
+def _owl_wing_mask(size):
+    """Маска левого крыла: сглаженный полигон, сужается к плечу."""
+    W, H = size
+    S = 4  # суперсэмплинг для гладкого края
+    m = Image.new('L', (W * S, H * S), 0)
+    d = ImageDraw.Draw(m)
+    d.polygon([(x * S, y * S) for x, y in OWL_WING_POLY], fill=255)
+    return m.resize((W, H), Image.LANCZOS)
+
+
+def owl_wing_frame(angle, out_path):
+    """Кадр Совы с повёрнутым левым крылом. angle < 0 — взмах вверх.
+
+    Раньше вырезалась полоса x<90 на всю высоту — вместе с крылом в поворот
+    уезжали куски шапки, лица и шарфа, и казалось, что «отрезается часть
+    головы». Теперь вырезается только полигон крыла; пустоту в теле
+    достраиваем построчной растяжкой брюшка (x 108..158), поэтому шва и
+    дырки не остаётся. Детерминировано (seeded noise) — кадр стабилен
+    между сборками.
+    """
     base = Image.open(f'{SPR}/owl.png').convert('RGBA')
-    SHOULDER = (87, 79)
-    # 1) стираем старое крыло (x < 90)
-    arr = np.array(base)
-    arr[:, :90, 3] = 0
-    base = Image.fromarray(arr)
-    # 2) копируем только область крыла и вращаем её вокруг плеча
-    wing = Image.open(f'{SPR}/owl.png').convert('RGBA').crop((0, 0, 90, base.height))
-    canvas = Image.new('RGBA', base.size, (0, 0, 0, 0))
-    canvas.paste(wing, (0, 0), wing)
-    rot = canvas.rotate(10, resample=Image.BICUBIC, center=SHOULDER)
-    # 3) лёгкий подъём вверх — взмах
-    lift = Image.new('RGBA', base.size, (0, 0, 0, 0))
-    lift.paste(rot, (0, -6), rot)
-    base.alpha_composite(lift)
-    base.save(f'{SPR}/owl_open.png')
+    W, H = base.size
+    wing_mask = _owl_wing_mask(base.size)
+    mask = np.array(wing_mask).astype(np.float32) / 255.0
+    m3 = mask[..., None]
+    arr = np.array(base).astype(np.float32)
+    # 1) тело без крыла: пустоту достраиваем слева направо от брюшка;
+    #    строки под шарфом (y < 252) берём из исходника чуть ниже,
+    #    чтобы не тянуть в заливку тень от шарфа.
+    fill = np.zeros_like(arr)
+    for y in range(H):
+        xs = np.where(mask[y] > 0)[0]
+        if len(xs) == 0:
+            continue
+        src_y = min(y + (14 if y < 252 else 0), H - 1)
+        src = arr[src_y, 108:158, :3]
+        idx = np.linspace(0, src.shape[0] - 1, xs.max() - xs.min() + 1).astype(int)
+        fill[y, xs.min():xs.max() + 1, :3] = src[idx]
+        fill[y, xs.min():xs.max() + 1, 3] = 255
+    fill_im = Image.fromarray(np.clip(fill, 0, 255).astype(np.uint8))
+    fill_im = fill_im.filter(ImageFilter.GaussianBlur(2.0))
+    farr = np.array(fill_im).astype(np.float32)
+    # лёгкая зернистость «пера», детерминированная
+    farr[..., :3] += np.random.default_rng(7).normal(0, 4, (H, W, 3)) * mask[..., None]
+    body_arr = arr.copy()
+    body_arr[..., :3] = arr[..., :3] * (1 - m3) + farr[..., :3] * m3
+    body_arr[..., 3] = arr[..., 3] * (1 - mask) + 255 * mask
+    body = Image.fromarray(np.clip(body_arr, 0, 255).astype(np.uint8))
+    # 2) крыло — только вырезанные пиксели крыла, поворот вокруг плеча
+    wing = Image.new('RGBA', (W, H), (0, 0, 0, 0))
+    wing.paste(base, (0, 0), wing_mask)
+    rot = wing.rotate(angle, resample=Image.BICUBIC, center=OWL_WING_PIVOT)
+    body.alpha_composite(rot)
+    body.save(out_path)
+
+
+def owl_flap_frame():
+    """Кадр взмаха: левое крыло поднято вверх-влево (−40° вокруг плеча)."""
+    owl_wing_frame(-40, f'{SPR}/owl_open.png')
 
 
 def owl_flap_frames():
     owl_flap_frame()
+    # «закрытый» кадр: крыло едва опущено ниже линии тела (+10°) —
+    # тот же алгоритм, голова и шарф не затрагиваются.
+    owl_wing_frame(10, f'{SPR}/owl_closed.png')
 
 
 def effect_owl_wings(open_):
